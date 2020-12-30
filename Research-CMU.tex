@@ -1,0 +1,448 @@
+\documentclass[11pt]{article}
+
+\usepackage{fullpage,url}
+\usepackage{amsmath}
+\usepackage[small,compact]{titlesec} 
+
+\def\Var{{\rm Var}\,}
+\def\E{{\rm E}\,}
+\def\Cov{{\rm Cov}\,}
+
+\providecommand{\norm}[1]{\lVert#1\rVert}
+
+\begin{document}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Statistical Genetics}
+\begin{enumerate}
+
+\item{Inference of latent variable model: binary phenotypes}
+
+Model of binary phenotypes: 
+\begin{itemize}
+\item Model: 
+\begin{equation}
+P(Y=1|Z,\beta) = \sigma(\beta_1 Z + \beta_0)
+\end{equation}
+
+\item Reformulating the model: follow the common notations, we are solving a logistic regression problem of $X \rightarrow Y$: 
+\begin{equation}
+P(Y=1|X,\beta) = \sigma(\beta_1 x + \beta_0)	
+\end{equation}
+We assume $\beta_1, \beta_0$ are known, and $X \sim N(\mu, \sigma^2)$. Our goals are: (1) the posterior distribution $X|Y,\beta$; (2) the model evidence: 
+\begin{equation}
+p(y) = \int p(x) p(y|x) dx	
+\end{equation}
+We note that the problem is very similar to Bayesian logistic regression, where parameters follow normal prior. 
+
+\item Posterior distribution $X|Y,\beta$: the log. posterior: 
+\begin{equation}
+\begin{array}{ll}
+\ln p(x|y,\beta) & = \ln p(x) + \ln p(y|x,\beta) + \text{const} \\
+ & = -\frac{1}{2\sigma^2}(x-\mu)^2 + y(\beta_1 x + \beta_0) - \ln(1 + \exp(\beta_1 x + \beta_0)) + \text{const}
+\end{array}
+\end{equation}
+We use the normal approximation of the posterior distribution. Suppose $\hat{x}$ maximizes the log-posterior function above. We next find the Fisher information at $\hat{x}$: taking the second derivative of $x$: 
+\begin{equation}
+- \frac{d^2}{dx^2} \ln p(x|y,\beta) = \frac{1}{\sigma^2} + \pi (1 - \pi) \beta_1^2	
+\end{equation}
+where $\pi = P(y=1|x,\beta) = \sigma(\beta_1 x + \beta_0)$. Thus $x|y,\beta$ is approximately normal:
+\begin{equation}
+x|y,\beta \sim N\left(\hat{x},(1/\sigma^2 + \hat{\pi}(1-\hat{\pi})\beta_1^2)^{-1}\right)	
+\end{equation}
+
+\item Theorem: we have the following approximation for sigmoid function of normal random variable (see [Bishop, Bayesian logistic regression]). Suppose $X \sim N(\mu,\sigma^2)$, and $\sigma(\cdot)$ is the sigmoid function, then
+\begin{equation}
+\int \sigma(x) p(x) dx \approx \sigma\left(\frac{\mu}{\sqrt{1 + \pi \sigma^2 / 8}}\right)	
+\end{equation}
+
+\item Evidence/predictive distribution: we want to solve: 
+\begin{equation}
+p(y=1) = \int_{-\infty}^{+\infty} N(x|\mu,\sigma^2) \sigma(\beta_1 x + \beta_0) dx	
+\end{equation}
+We perform variable substitution: $t = \beta_1 x + \beta_0$, then $x = (t - \beta_0)/\beta_1$, and $dx = dt/\beta_1$. Plug in these terms: 
+\begin{equation}
+p(y=1) = \int_{-\infty}^{+\infty} N(t|\beta_1 \mu + \beta_0, \beta_1^2 \sigma^2) \sigma(t) dt \approx \sigma\left( \frac{\beta_1 \mu + \beta_0}{\sqrt{1 + \pi \beta_1^2 \sigma^2/8}} \right)
+\end{equation}
+
+\end{itemize}
+
+Approximate inference of latent variable model: 
+\begin{itemize}
+\item Posterior mode: Let $\phi = (\sigma_{\gamma}^2, \sigma_z^2)$ be parameters of the model of $Z$, the posterior distribution:  
+\begin{equation}
+p(\phi,\beta|X,Y,w) \propto p(\phi) p(\beta) \prod_{i=1}^n \int p(z_i|X_i,w,\phi) p(y_i|z_i,\beta) dz_i	
+\end{equation}
+We assume that we have noninformative prior of $(\phi,\beta)$. The integral can be calculated using the results above, and so given any $(\phi,\beta)$, the posterior can be efficiently calculated. Any numerical optimization algorithm can be used to find the posterior mode. 
+
+\item Normal approximation based on posterior mode: compute the second partial derivative of $\ln p(\phi,\beta|X,Y,w)$ numerically and apply the normal approximation. 
+
+\item Gibbs sampling: we are interested in the conditional distributions (let $D = (X,Y,w)$ be the observations): 
+\begin{itemize}
+	\item $p(\beta|D,Z,\phi) = p(\beta|X,Z)$: the usual logistic regression
+	\item $p(\phi|D,\beta,Z) = p(\phi|X,w,Z)$: normal distribution of unknown variance but known mean
+	\item $p(Z|D,\beta,\phi)$: logistic regression with uncertain data. Approximate normal distribution. 
+\end{itemize}
+
+\item EM algorithm for posterior mode: in the E-step, suppose we have $\theta^{(t)}=(\phi^{(t)}, \beta^{(t)})$, we compute: 
+\begin{equation}
+\begin{array}{lll}
+Q\left(\theta|\theta^{(t)}\right) &	= & \log P(\phi, \beta) + \sum_{i=1}^n \E_{z_i|y_i,X_i,w_i,\theta^{(t)}} \left[ \log P(z_i|X_i,y_i,w_i,\theta)\right]\\
+ & = & \log P(\phi, \beta) + \sum_{i=1}^n \E_{z_i|y_i,X_i,w_i,\theta^{(t)}} \left[ \log P(z_i|X_i,w,\phi) + \log P(y_i|z_i,\beta)\right]
+\end{array}
+\end{equation} 
+%\begin{equation}
+%\log P(y_i|z_i,\beta,\sigma^2) = -\frac{1}{2\sigma^2}(y_i - \beta_1 z_i - \beta_0)^2 - \log \sigma - \log \sqrt{2 \pi}	
+%\end{equation}
+Note that $\log P(y_i|z_i,\beta)$ term is not quadratic, and its expectation over $z_i$ (normal distribution) cannot be obtained analytically. We could apply the approximation with logistic regression of uncertain data to estimate the expectation, however, then the maximization of $Q(\cdot)$ still has to be done numerically. 
+\end{itemize}
+
+Issues: 
+\begin{itemize}
+\item The sign problem: a variant may occasionally have protective effect on the phenotype. How should this be modeled? In general, we can define another hidden (binary) variable per variant, $U_j$, and $U_j$ can be part of the inference. Heuristically, we could estimate the effect direction of each SNP, and then fix $U_j$. 
+\begin{itemize}
+	\item Remark: protective mutations are rare in practice for human diseases. 
+\end{itemize}
+
+\item Diploid genotype: each individual has two copies of a gene, may need to model the dominance and dosage effect. Ex. if a gene is haplosufficient, then even if one copy is disrupted, the other may still be functional. 
+
+\item Hypothesis testing approach: to evaluate the approach (type I error and power), need to have a test of the key coefficients (equal to 0 or not). For Bayesian approach, this is effectively using the posterior interval of the coefficients (decision rule: reject $H_0$ if 0 is not in the posterior interval at level $\alpha$). It is also possible to develop a traditional test of the coefficients $\beta$. 
+\begin{itemize}
+	\item See Errors-in-variables models. 
+\end{itemize}
+
+\item Correction for multiple hypothesis testing (MHT). 
+\end{itemize}
+
+\item{Latent variable model with interactions}
+
+Latent variable model with interactions: 
+\begin{itemize}
+\item Motivation: the main challenge is that there are many possible interactions between genetic mutations. This may include: 
+\begin{itemize}
+	\item Gene-level interaction: SNPs interaction within genes. 
+	\item Gene-gene interaction: SNPs of one gene interact with SNPs of another gene. 
+	\item Pathway-level interaction: gene interaction within pathways.
+	\item Between-pathway interaction: genes of one pathway interact with genes of another pathway. 
+\end{itemize}
+
+\item Simple method for pathway-level test: we consider a case where we want to associate a pathway with a phenotype, allowing interactions. Our model would be: 
+\begin{equation}
+Y = \sum_j \beta_j X_j + \sum_{i,j} \beta_{ij} X_i X_j + \epsilon	
+\label{eq:all_interactions}
+\end{equation}
+with the null hypothesis to be tested: $H_0: \beta_{ij} = 0$ for any $i,j$. While it is possible to do the test, it suffers from a very high level of dof. $p + p^2$. 
+
+\item Benefit of latent variable model: to associate a pathway with a phenotype, or in general $p$ features with the response, we would group the features into $K$ groups, with each group of features potentially affecting one latent variable, and the respond depends on the $K$ latent variables, with possible interactions. The number of parameter is thus: 
+\begin{equation}
+\text{dof} = p + K + K^2 	
+\end{equation}
+In general, this is much less than $p + p^2$ if $K << p$.
+
+\item Alternative strategy: hierarchical model. In Equation~\ref{eq:all_interactions}, we could introduce priors on $\beta_{ij}$ to reduce dof. Example: $\beta_{ij} = 0$ if $i,j$ in the same group, and $\beta_{ij} \sim N(\mu_{kl}, \sigma_{\beta}^2)$ if $i$ in the group $k$ and $j$ in the group $l$. 
+
+\item Alternative strategy: feature expansion (collapsing at group level). Assume the $p$ features can be partitioned into $K$ groups, introduce additional variables that represent each of the $K$ group. Example, for any potential interacting pair of variables (e.g. pair of PPI genes), $X_j$ and $X_k$, define a new variable $Z = X_j \wedge X_k$.
+\begin{itemize}
+	\item The model is flexible, allowing many different features to be added, and it allows $X_j$ individually affecting $Y$ (without going through the intermediate latent variable). 
+	\item The limitation: new variables are pre-defined, unlike the latent variable model, where there could be additional (unknown) parameters associating the observed and unobserved variables.  
+\end{itemize}
+\end{itemize}
+
+Latent variable model with gene-environment interactions: 
+\begin{itemize}
+\item Model: suppose we have a covariate $U$ for some environmental variable, and we wish to test if the gene has interaction with $U$. Our model of $Z$ is the same as before, but for phenotype, we have: 
+\begin{equation}
+Y_i = \beta_1 Z_i + \beta_2 U_i + \beta_3 Z_i U_i + \epsilon_i	
+\end{equation}
+Following the same procedure, we integrate out $Z_i$: 
+\begin{equation}
+y_i | x_i, u_i, \beta, \gamma \sim N\left( (\beta_1 + \beta_3 u_i) x_i \gamma + \beta_2 u_i + \beta_0, (\beta_1^2 + \beta_3^2 u_i^2)\sigma_z^2 + \sigma^2\right)	
+\end{equation}
+
+\end{itemize}
+
+Latent variable model with gene-gene interactions: 
+\begin{itemize}
+\item Model: suppose we have $p$ SNPs, $X_1, \cdots, X_p$, some of which belong to the first group, $G_1$, (e.g. Domain 1 of a gene), and the rest belong to the second group, $G_2$ (e.g. Domain 2). Suppose SNPs in $G_1$ affect a latent variable $Z_1$, and similarly $G_2$ SNPs affect $Z_2$:
+\begin{equation}
+\E(Z_k|X,\gamma) = \sum_{j \in G_k} \gamma_j X_j \qquad k = 1, 2
+\end{equation}
+The response variable $Y$ is a GLM of $Z_1$ and $Z_2$ with possible interaction: 
+\begin{equation}
+\E(Y|Z_1, Z_2) = g^{-1}\left(\tau_0 + \tau_1 Z_1 + \tau_2 Z_2 + \mu Z_1 Z_2\right)
+\end{equation}
+where $\mu$ is the interaction term. Similar to the previous models, priors on $\gamma_j$ can be defined, based on the information of SNPs (conservation, MAF, etc.). 
+
+\item Remark: one can also define a hierarchical model which eliminate the latent variables. However, considerably more coefficients will be involved, for every $j,k$, where $X_j \in G_1$ and $X_k \in G_2$, we will need an coefficient $\beta_{jk}$ (regularized, prior distribution depends on the effect of $j$ on $Z_1$, $k$ on $Z_2$ and the interaction). It is probably computationally difficult to solve this model. 
+\end{itemize}
+
+Inference of latent variable model with interactions: 
+\begin{itemize}
+\item Logistic regression with uncertain data: we consider the model of logistic regression with two explanatory variables: 
+\begin{equation}
+P(Y=1|X_1,X_2,\beta) = \sigma(\beta_1 X_1 + \beta_2 X_2 + \beta_{12} X_1 X_2 + \beta_0)	
+\end{equation}
+where $X_1 X_2$ is the interaction term. The explanatory variables have prior distributions: 
+\begin{equation}
+X_k \sim N(\mu_k,\sigma_k^2) \qquad k = 1,2	
+\end{equation}
+And our goal is similar to before: (1) posterior distribution $X_1,X_2|Y,\beta$; and (2) the model evidence. 
+
+\item Posterior distribution: apprxoimate the posterior by normal distribution. First, we find the posterior mode. 
+\begin{equation}
+\begin{array}{ll}
+\ln p(x_1, x_2|y,\beta) & = \ln p(x_1) + \ln p(x_2) + \ln p(y|x_1,x_2,\beta) + \text{const} \\
+\end{array}
+\end{equation}
+Note that when $x_1$ is given, the distribution of $x_2$ can be reduced to the case we have before; and similarly for the distribution of $x_1$. This implies a conditional maximization algorithm for maximization; and Gibbs sampling. 
+
+\item Evidence/predictive distribution: the model evidence is: 
+\begin{equation}
+p(y=1) = \int\int N(x_1|\mu_1,\sigma_1^2) N(x_2|\mu_2,\sigma_2^2)	\sigma(\beta_1 x_1 + \beta_2 x_2 + \beta_{12} x_1 x_2 + \beta_0) dx_1 dx_2
+\end{equation}
+We could use repeated integration: 
+\begin{equation}
+p(y=1) = \int N(x_2|\mu_2,\sigma_2^2) dx_2 \int  N(x_1|\mu_1,\sigma_1^2) \sigma((\beta_1 + \beta_{12} x_2) x_1 + \beta_2 x_2 + \beta_0) dx_1
+\end{equation}
+The latter integral is a function of $x_2$, and can be found using our previous result: 
+\begin{equation}
+\int  N(x_1|\mu_1,\sigma_1^2) \sigma((\beta_1 + \beta_{12} x_2) x_1 + \beta_2 x_2 + \beta_0) dx_1 \approx \sigma \left( \frac{(\beta_1 + \beta_{12} x_2) \mu_1 + \beta_2 x_2 + \beta_0}{\sqrt{1 + \pi (\beta_1 + \beta_{12} x_2)^2 \sigma_1^2}/8} \right)	
+\end{equation}
+
+\end{itemize}
+
+Predicting phenotypes from network states:
+\begin{itemize}
+\item Background: suppose we are given the states of all genes (whether a gene is disrupted or not) for each sample: they can be predicted from sequencing data, or are treated as latent variables. And we also have a phenotype state of each sample. Can we develop a predictive model from gene states to the phenotype? 
+
+\item Problem: let $X$ be the gene states, $X_i$ is 0 if a gene is normal, 1 if a gene is disrupted. The genes are organized into pathways/networks, $G$, thus we want to predict $Y$ from the network state $X(G)$. 
+
+\item Remark: while similar models are studied in other regression problems (features are structured), the focus here is to learn the non-linear aspect of the model (as oppose to e.g. adjacent genes should have similar coefficients). The informative patterns are, for example, two pathways are disrupted at the same time; the number of disrupted genes in a pathway exceeding a threshold; etc. 
+\end{itemize}
+
+\item{Experiment design}
+
+Tasks: 
+\begin{itemize}
+\item Gene effect test: one gene only, and test whether the gene has any effect on phenotype. 
+\item Interaction test: two or more genes, and test whether there is gene-gene interaction.
+\begin{itemize}
+\item Two genes: no marginal effect
+\item Two genes: marginal effect
+\item Mulitple genes: single interacting pair
+\item Multiple genes: multiple interacting pairs
+\end{itemize}
+\end{itemize}
+
+Simulation of sequences/variants: 
+\begin{itemize}
+\item Simple: similar to [Lin11], 10-20 rare variants in a locus, in LE. 
+\item Complex: population genetics simulation of sequences, and limit to variants using MAF and $MAF_{\text{total}}$ cutoff [Morris10]
+\item Complex: take real sequences from 1000 Genome or any real data used for evaluation [Yu12].
+\item Question: some studies simulate the descendents of real sequences [Zhang07], why is this necessary?  
+\end{itemize}
+
+Genetic model:
+\begin{itemize}
+\item Simple: $\gamma_j$ (impact of a SNP) is either 0 (neutral) or 1 (functional), with the ratio of 0 vs. 1 determined by some population genetic estimate. 
+\item Complex: a SNP is either neutral (0) or functional; if functional, then $\gamma_j$ follows some distribution in $[0,1]$, e.g. uniform distribution. Then we have, e.g. 10 levels $(0.1,0.2,\cdots,2.0)$, with 2 SNPs per level [Wu11]. 
+\item Question: possible to get a distribution of $\gamma$ of all functional variants? See [1000 Genome Project] and other papers that estimate the percent of neutral vs functional mutations in population genetic data. 
+\end{itemize}
+ 
+Prior knowledge: need to specify $w$ for all the variants to be used as part of the input of the program
+\begin{itemize}
+\item Under the simple genetic model: $w$ is either 0 or 1 and the misclassification rate (when $w_j \neq \gamma_j$) matches the rate from practical estimate. 
+\begin{itemize}
+\item If $w$ is based on MAF: e.g. $w_j = 1$ iff $p_j < 0.01$. It might be possible to get the estimate of the misclassification rate using population genetics. 
+\item If $w$ is based on PolyPhen scores: the misclassification rates reported by PolyPhen. 
+\end{itemize}
+
+\item Under the complex genetic model: $w_j \sim N(\gamma_j, \sigma_{\gamma}^2)$, different levels of variance corresponding to how accurate our prior knowledge is. Apply truncation s.t. $w_j \in [0,1]$. 
+\end{itemize}
+
+Comparison with other methods: 
+\begin{itemize}
+\item Collapsing method: use presence/absence or the number of rare variants. Could use this for both gene test and interaction test. 
+\item Weighted collapsing method: use $\sum_j w_j X_j$ as the explanatory variable and do regression. Find the reference [Wei Pan's work?]
+\item minP-SNP test: for gene effect, use the min. p-values of all SNPs in a gene. 
+\item minP-pair test: for interaction effect, use the min. p-values of all SNP pairs between two genes.  
+\item Question: what is the decision rule? Bonferroni correction [Morris10]: reject $H_0$ if $minP < \alpha/p$, where $p$ is the number of SNPs. This is too conservative. Do permutation/resampling and obtain the null distribution of $minP$. 
+\end{itemize}
+
+Evaluation: 
+\begin{itemize}
+\item Type I error: 
+\begin{itemize}
+\item For Bayesian approach: obtain the posterior interval ($I$) of $\tau$ at level $\alpha$, if $0 \notin I$, then reject $H_0$. 
+\item Question: really need to evaluate type I error at certain level $\alpha$? 
+\end{itemize}
+\item Power:
+\end{itemize}
+
+Real data:
+\begin{itemize}
+\item Comparison with other methods: suppose we have one pair (or a single gene) that is biologically valid
+\begin{itemize}
+\item Comparison of $p$-values: compare the p-values of this pair (gene) under different methods. 
+\item Power assessment: resampling of data, and assess the power of different methods [Yandell11]. 
+\end{itemize}
+
+\item Pancreatitis: inflmmation at pancreas, but not autoimmune disease. Main function affected: secretion of trpsin for digesting protein (not insulin production). Existing studies
+\begin{itemize}
+	\item GWAS: identify two genes with genome-wide significance. CFTR and CLDN2 genes. A few other genes slightly below the threshold may be interesting. Related to calcium metabolism (?)
+	\item Sequencing data: of about 5 candidate genes. 
+\end{itemize}
+\end{itemize}
+ 
+\item{Using severity scores for gene test}
+
+Severity score distribution: 
+\begin{itemize}
+\item Motivation: suppose we have a severity score for every rare variant. Then we could have a total severity score per individual (the sum of the scores, but most people have at most one severe mutation anyway). If we draw the distribution of the severity scores of cases and controls, we should expect that cases tend to have a distribution that is skewed towards more severe mutations than controls. In addition, most people would have zero-scores (zero-inflation). Can we develop a test based on this idea? 
+
+\item Modeling the severity score distribution: suppose $Y$ is the phenotype label (1 for case, 0 for control), and $Z$ is the severity score. We want to compare the distribution $P(Z|Y=1)$ vs. $P(Z|Y=0)$. However, it does not have an obvious parametric form, so we use Bayes Theorem, as $P(Y=1|Z)$ is the penetrance of the mutation: 
+\begin{equation}
+P(Z|Y=1) = P(Y=1|Z) \frac{P(Z)}{P(Y=1)}	
+\end{equation}
+And similarly for $P(Z|Y=0)$. We assume a simple model of the penetrance: 
+\begin{equation}
+P(Y=1|Z) = \sigma(\beta_1 Z + \beta_0)	
+\end{equation}
+The likelihood is given by: 
+\begin{equation}
+\prod_i p(z_i|y_i) = \prod_i \frac{p(z_i)}{p(y_i)} \prod_i p(y_i | z_i)	\propto \prod_i p(y_i | z_i)
+\end{equation}
+The term $p(y_i)$ is simply disease prevalance, and the term $p(z_i)$ is the same for cases and controls. Thus the model is equivalent to logistic regression of $y$ on $z$. 
+
+\end{itemize}
+
+Modeling genotype distributions: 
+\begin{itemize}
+\item An alternative model of the distribution of $Z$ is: 
+\begin{equation}
+Z = \sum_j w_j X_j
+\end{equation}
+where $X_j$ is the genotype at the $j$-th SNP, and $w_j$ is the severity score of the mutation $X_j$. Thus $Z$ is a sum of Bernoulli random variables. The zero-inflation comes from the fact that for any individual, $X_j$'s are mostly equal to 0. However, since $X_j$'s are observed, all the information in $Z$ is in $X_j$, and we may just want to model $X_j$ distribution. 
+
+\item Genotype model: the simplest model assumes that $X_j$ follows Bernoulli distributions (two alleles per site): 
+\begin{equation}
+X_j | Y = 1 \sim \text{Bernoulli}(p_j)	\qquad X_j | Y = 0 \sim \text{Bernoulli}(q_j)
+\end{equation}
+where $p_j$ and $q_j$ are the frequency of the rare variants in cases and controls respectively. Suppose $N^{\text{ca}}$ and $N^{\text{cn}}$ are the number of cases and controls, respectively, and for the $j$-th site, let $N^{\text{ca}}_j$ and $N^{\text{cn}}_j$ be the number of rare variants in caseas and controls, respectively. The likelihood: 
+\begin{equation}
+P(D|p,q) = \prod_j p_j^{N^{\text{ca}}_j} (1 - p_j)^{N^{\text{ca}} - N^{\text{ca}}_j} 	q_j^{N^{\text{cn}}_j} (1 - q_j)^{N^{\text{cn}} - N^{\text{cn}}_j} 
+\end{equation}
+The simplest approach is to test $H_0: p_j = q_j, \forall j$ (the approach by [VAAST]). However, this test suffers from a high dof. We can use the severity scores to reduce the complexity of the model. We know that: 
+\begin{equation}
+\frac{p_j}{q_j} = \frac{f_j}{1 - f_j} \frac{1 - K}{K}	= \frac{1 - K}{K} \frac{f_{j0}}{1 - f_{j0}} \cdot \text{OR}_j
+\end{equation}
+where $f_j$ is the penetrance of the rare variant of the $j$-th site, $f_{j0}$ is the penetrance of the reference allele at the $j$-th site, $K$ is the disease prevalence, and $\text{OR}_j$ is the odds ratio of the rare variant. Clearly, $\text{OR}_j$ depends on the severity $w_j$, and this can be modeled as a simple linear function (assuming $w_j$ is properly scaled):
+\begin{equation}
+\text{OR}_j = \beta w_j	
+\end{equation}
+Since $w_j$ is given, the only parameter of the model is $\beta$, a great reduction of model complexity. 
+
+\item Remark: this model effectively tests if the penetrance $f_j$ (or odds ratio) has a monotonic relationship with the severity score $w_j$. When $f_j$ (or $\text{OR}_j$) is observed, this is a standard problem (since $w_j$ is known); but since they are unknown parameters, we need a new model. 
+
+\item Remark: the VAAST model also uses the (kind of) severity score in the model. The model defines the fraction of a given mutation in neutral vs. disease proteins, and use the ratio in the likelihood. However, this apporach only weighs the different sites (s.t. the more severe sites are weighed more heavily), but does not achieve reduction of model complexity. 
+\end{itemize}
+
+\end{enumerate}
+\pagebreak
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Genomics}
+\begin{enumerate}
+
+
+\item{Finding gene regulators from expression data}
+
+Problem and background:
+\begin{itemize}
+\item Problem: given the putative relevance of regulators, generally TFs, to genes (motif score, ChIP-chip/seq data, etc.), and given the expression data of the genes in a certain context, e.g. development, or across multiple tissues, identify the active or true regulators of each gene. 
+
+\item Motivation: 
+\begin{itemize}
+	\item Motif-based scores may lead to a high fraction of false positives; and even in vitro experiments (e.g. PBM) can not predict well the in vivo binding. 
+	\item ChIP-chip or ChIP-seq data are often obtained in cell lines or conditions/cell types different from the expression data, thus do not directly suggest the biologically active regulators. 
+\end{itemize}
+
+\item A special case: expression data can be represented as binary class of genes. 
+\begin{itemize}
+	\item Application: similarly expressed genes vs. the other genes, find the relevant regulators. 
+	\item Application: genes are up- or down-regulated, find the regulators responsible for stimulation or inhibition. Ex. TF finding in DREM; TF/motif finding in genes differentially expressed in cancer cells vs. normal cells. 
+\end{itemize}
+\end{itemize}
+ 
+Strategies: 
+\begin{itemize}
+\item Basic strategy: treat the TF binding or motif scores as features, and expression data or class as response variables, a regression problem. 
+
+\item Features: a TF-binding feature could be the summary statistic incorporating homotypic clustering, conservation and other features (e.g. histone modification). 
+
+\item Combinatorial TF interactions: a single match to TF may be false positive, but putative binding sites of two related TFs in neighborhood are much more likely to be true positives. Model these as additional features, potentially favoring adjacent sites. 
+
+\item Gene relationship: genes form groups/pathways and are related to each other (e.g. PPI). The genes in the same pathway or closely related are more likely to share the same regulators.  
+
+\item Class structure: suppose genes are grouped into clusters and the response variables are cluster membership, then there is additional structure in the responsible variables, e.g. two closely related clusters are likely to share the same regulator. Thus pooling multiple clusters could increase the power of detecting regulators (an idea used in DREM). 
+
+\item Remark: 
+\begin{itemize}
+	\item The main challenge is to model gene structure and class structure. 
+	\item Combinatorial features: the promising features can be learned without using the label data. The simplest strategy is to do a co-occurrence test of pairwise TFs. This can be improved by: (1) gene structure (search for combinatorial features in related genes); (2) subnetworks instead of pairs, e.g. $A-B$, $B-C$ and $C-A$ all have weak statistics, but the triplet may be a good feature.  
+\end{itemize}
+\end{itemize}
+
+Incorporating gene groups with single response variable: 
+\begin{itemize}
+\item Motivation: There is probably substantial heterogeneity in the gene regulatory network, e.g. two genes may have similar expression profiles, but their regulators may be quite different. Incorporating gene groups could increase the power:
+\begin{itemize}
+	\item Example: a TF may control a small set of genes in a large cluster, if we do an enrichment test of this TF, it is not significant; but if this small number of genes fall in the same pathway, then this is highly unlikely due to chance. 
+	\item Alternative approach: for each pathway, separately test if the regulator is enriched. However, this loses power, as a regulator may act in multiple pathways; and in particular, the weak effects in multiple pathways could be strong evidence. 
+\end{itemize}
+
+\item Model: given the features $X_1, \cdots, X_p$ of $n$ genes, and class variables $Y_i, 1 \leq i \leq n$. In the simplest model, we have: 
+\begin{equation}
+Y = X \beta + \epsilon	
+\end{equation}
+(Replace with logistic regression for binary classes). Suppose genes can be divided into $K$ disjoint pathways, then to model heterogeneity, we may assume that each pathway has its own $\beta_k, 1 \leq k \leq K$ (i.e. regulators are pathway specific). To reduce the model complxity, we need to model how these $\beta_k$'s are related. We could also assume that these pathways may be related in some way (associated with a graph). 
+
+\item Interactions: introduce pathway variables of genes, $Z$, thus $Z_i = 1$ if a gene belongs to the pathway (suppose we study one pathway a time). Then we have the regression to model the dependence of $\beta$ on pathways (consider only one feature): 
+\begin{equation}
+Y = \beta X  + \gamma X \cdot Z + \epsilon	
+\end{equation}
+where $X \cdot Z$ is the interaction term, and the null hypothesis that the regulator is not relevant is expressed as: $\beta = \gamma = 0$.
+
+\item Hierarchical model: we could assume that $\beta_k$ is from a common distribution, e.g. $N(\lambda, \tau^2)$, and the null hypothesis that the regulator is irrelevant corresponds to $\lambda = 0$, which can be inferred from the posterior distribution of $\lambda$. A yet better approach to model heterogeneity is to use a mixture distribution: $\beta_k \sim \text{Mixture}(0, N(\lambda, \tau^2))$, thus the regulator has no effect in most pathways, but may have non-zero effect on a small number of pathways. 
+
+\item Lasso: we could use the idea of fused Lasso that penalizes the difference of $\beta_k$'s between two groups: this has the effect of regularizing $\beta_k$'s. In particular, the penalty can be weighted by using the pathway relationship: the more related pathways are penalized more heavily if their $\beta_k$'s are different. 
+
+\item Kernel smoothing: this is the idea of varying coefficient model, applied to the discrete index variable $k$. We'll learn a smooth function $\beta_k$ over $k$, thus related pathways tend to have similar values of $\beta_k$. 
+
+\item Comparison of different methods: 
+\begin{itemize}
+	\item Regulator-pathway interaction: The drawbacks are (1) there are many pathways to test (multiple testing correction); (2) no simple way to incorporate pathway relationship; (3) one pathway is tested at each time, thus losing the power.  
+	\item Hierarchical model: modeling pathway relationship is difficult; computationally expensive. 
+	\item Lasso: not clear how to do hypothesis testing. 
+	\item Kernel smoothing: not clear how the kernel should be defined. 
+\end{itemize}
+
+\item Remark: 
+\begin{itemize}
+	\item Many genes are not assigned to any known pathway, thus the power is reduced if we use only known pathways. Possibly strategies: (1) use gene modules derived from functional gene networks; (2) assign any such genes to known pathways using gene network data. 
+	\item Overlapping pathways can be incoporated by: if a gene belongs to multiple pathways, then $\beta$ for this gene is a mean of $\beta_k$ of all related pathways.
+\end{itemize}
+\end{itemize}
+
+Incorporating gene networks with single class variable: 
+\begin{itemize}
+\item Model: similar to above, but now we have a graph $G$ that relates genes, and we want related genes to share regulators. Suppose $\beta_{ij}$ is the effect of the $j$-th feature on the $i$-th gene, we need to regularize on $\beta_{ij}$. 
+
+\item Hierarchical model with latent variable: suppose we have a latent variable $Z_{ij}$, it is 1 if $i$-th gene is regulated by the $j$-th feature. We could define a prior distribution of $Z_{ij}$ using Markov random field: if two genes are adjacent, then it is more likely their $Z_{ij}$ terms share the same sign. Then for the $i$-th gene: if $Z_{ij} = 0$, the $j$-th feature is irrelevant; if $Z_{ij} = 1$, the $j$-th feature has effect $\beta_j$. 
+
+\item Lasso: the idea of fused lasso can be applied easily here: we learn parameters $\beta_{ij}$ with penalty for difference between parameter values of adjacent genes. 
+
+\item Kernel smoothing: similar idea as above, we could define the objective function s.t. $\beta_{ij}$ are smoothed. 
+
+\end{itemize}
+
+\end{enumerate}
+\end{document}

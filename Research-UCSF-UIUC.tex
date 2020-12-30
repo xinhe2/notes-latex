@@ -1,0 +1,1787 @@
+\documentclass[11pt]{article}
+
+\usepackage{fullpage,url}
+\usepackage{amsmath}
+\usepackage[small,compact]{titlesec} 
+
+\begin{document}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Gene Regulation}
+\begin{enumerate}
+
+\item{Binding of TFs to a sequence}
+
+Problem: Given a sequence with $n$ putative TFBSs, let $\sigma$ be one possible binding configuration, and $W(\sigma)$ be the statistical weight of $\sigma$. The probability of a configuration $\sigma$ is $P(\sigma) = W(\sigma) / Z$ where $Z = \sum_{\sigma}W(\sigma)$. The key problem is thus to compute $Z$. 
+
+Assumptions: 
+\begin{enumerate}
+\item Binding weight parameterization: the statistical weight due to binding of a TF to a DNA site $S$ is denoted as $q(S)$, given by: 
+\begin{equation}
+q(S) = [\text{TF}] K(S) = [\text{TF}] K(S_{\max}) e^{-\beta \Delta E(S)} 
+\end{equation}
+where $[\text{TF}]$ is the concentration of the TF, $S_{\max}$ is the strongest site, and $\Delta E(S)$ is the mismatch energy of the site $S$. According to the theory of Berg and von Hippel, the mismatch energy is related to the LLR score of sites: 
+\begin{equation}
+\beta \Delta E(S) = -\text{LLR}(S) + \text{LLR}(S_{\max})
+\end{equation}
+Thus, if $[\text{TF}]$ is unknown, we can define a new parameter as $R = [\text{TF}] K(S_{\max})$ as the free parameter of the TF. The meaning of $R$ is the maximum binding weight of all sites (or the weight of the consensus site). If $[\text{TF}]$ is known up to some scale, $[\text{TF}] = \nu [\text{TF}]_{\text{rel}}$, where $\nu$ can be thought of as the maximum TF concentration if $[\text{TF}]_{\text{rel}}$ is between 0 and 1, we have: 
+\begin{equation}
+q(S) = \nu K(S_{\max}) [\text{TF}]_{\text{rel}} e^{-\beta \Delta E(S)} 
+\end{equation}
+We can parameterize by $\nu K(S_{\max})$, which can be thought of as the binding of the consensus site at the maximum TF level. 
+
+\item Interaction: The statistical weight from PPI between two TF molecules $k$ and $k'$ bound to the sequence with distance $d$ is denoted as: $\omega(k,k',d)$. Could parameterize $\omega$ as: $\omega(k,k',d) = \omega_{k,k'} \gamma(d)$, where $\omega_{k,k'}$ is the maximum interaction from $k$ and $k'$, and $\gamma(d)$ is a distance-dependent function, for example, for cooperative binding, $\gamma(d) = 1$ if $d <= 50$, $\gamma(d) = 0$ if $d > 150$, and smooth interpolation between $50$ and $150$ bps. 
+
+\end{enumerate}
+
+Note: if $k = 0$, i.e. the site is unbound, we should have $q_0(i) = 1$ for any site at position $i$; and $\omega(k,k',d) = 1$ if either $k = 0$ or $k' = 0$. 
+
+Algorithm: 
+
+\begin{enumerate}
+
+\item {Dynamic programming}
+
+Suppose each site $i$ is represented by its start location, $L_i$ and the TF it is associated with, $f_i$. Two overlapping sites will be represented as two separate entries. The distance between two sites $i$ and $j$ will be denoted as $d(i,j) = L_j - L_i$. For simplicity, denote $q(i) = q_{f_i}(i)$ and $\omega(i,j) = \omega(f_i, f_j, d(i,j))$. Let $\sigma[i]$ be one configuration up to site $i$, where $i$ is bound by its cognate TF $f_i$. We could decompose the configuation $\sigma[i]$: suppose the nearest site to $i$ that is occupied in this configuration is $j$ ($j < i$, $j = 0$ if no site is occupied before $i$), then we have:
+\begin{equation}
+W(\sigma[i]) = W(\sigma[j]) \omega(i, j) q(i)
+\end{equation}
+We use $Z(i)$ to denote the total statistical weight of all configurations up to $i$, where the site $i$ is occupied, i.e., $Z(i) = \sum_{\sigma[i]}W(\sigma[i])$. Then we sum over all $\sigma[i]$ in the above equation: 
+\begin{equation}
+\sum_{\sigma[i]}W(\sigma[i]) = \sum_{j}{\sum_{\sigma[j]}W(\sigma[j]) \omega(i, j) q(i)}
+\end{equation}
+Plug in the expression for $Z(j)$, and separate the special case where $j=0$, we obtain the recurrence: 
+\begin{equation}
+Z(i) = q(i) \left[ \sum_{j \in \Phi (i)}{\omega(i, j) Z(j)} + 1 \right]
+\label{eq:part_func_off}
+\end{equation}
+where $\Phi (i)$ is the set of sites before $i$ that do not overlap with $i$. In order to compute the total $Z$, we note that the last bound site in any configuation could be $1,2,\cdots,n$ or no bound site. So we have: $Z = 1 + \sum_{i=1}^{n}Z(i)$. No need of initial condition: if $\Phi (i) = \emptyset$, the summation term will be automatically zero. 
+
+\item{A faster dynamic programming} 
+
+Because of the nature of short-range cooperativity, the contribution from the cooperative binding will stop after a certain distance in the summation in Equation~\ref{eq:part_func_off}. Therefore the computation can be simplified. Let $C(i)$ be the boundary of site $i$, i.e. only when $j > C(i)$, there will be cooperative binding. Let $Z^t(i)$ be the partition function over all enhancer states up to site $i$, where the site $i$ itself may or may not be occupied, i.e.
+\begin{equation}
+Z^t(i) = \sum_{j \leq i} Z(j) + 1
+\end{equation}
+Note that in the above equation, $j$ could overlap with $i$. We would have the following recurrences: 
+\begin{equation}
+Z(i) = q(i) \left[ \sum_{j \in \Phi (i), j > C(i)} \omega(i,j) Z(j) + Z^t(C(i)) \right]
+\end{equation}
+\begin{equation}
+Z^t(i) = Z(i) + Z^t(i-1)
+\end{equation}
+The last equation comes from the fact that: when $i$ is not occupied, the total weight would be just $Z^t(i-1)$, as if the site $i$ does not exist. The initial condition is given by: $Z^t(0) = 1$. And the final result is: $Z = Z^t(n)$ where $n$ is the last site. 
+
+\end{enumerate}
+
+
+%If a site could be a target of multiple TFs (e.g. there exist two TFs whose PWMs are very similar), then we will add the bound TF in the above recurrence. Specifically, let $\sigma[i,k]$ be a configuation up to site $i$, where $i$ is bound by TF $k$. Do the similar decomposition of $\sigma(i,k)$ according to the neareat bound site: 
+%\begin{equation}
+%W(\sigma[i,k]) = W(\sigma[j,k']) \omega(k, k', d(i,j)) q_{k}(i)
+%\end{equation}
+%We use $Z(i,k)$ to denote the total statistical weight of all configuations up to $i$, where the site $i$ is occupied by the TF $k$. We sum over $\sigma[i,k]$ in the above equation: 
+%\begin{equation}
+%\sum_{\sigma[i,k]}W(\sigma[i,k]) = \sum_{j}\sum_{k'}{\sum_{\sigma[j,k']}W(\sigma[j,k']) \omega(k, k', d(i,j)) q_{k}(i)}
+%\end{equation}
+%Plug in the expression for $Z(j,k')$, we obtain the recurrence: 
+%\begin{equation}
+%Z(i,k) = q_{k}(i) \left[ \sum_{j \in \Phi (i)}\sum_{k' \neq 0}{\omega(k, k', d(i,j)) Z(j,k') } + 1 \right]
+%\label{eq:binding_weight_mul}
+%\end{equation}
+%In the above equation, $k$ is allowed to be 0. Alternatively, we require $k > 0$ in the above equation, and have a special recurrence for $Z(i,0)$, which is simpler: 
+%\begin{equation}
+%Z(i,0) = Z(i-1,0) + \sum_{k \neq 0}{Z(i-1,k)}
+%\end{equation}
+%The total statistical weight is given by: $Z = Z(n,0) + \sum_{k \neq 0}Z(n,k)$
+
+Note: the equation used by [Segal \& Gaul, Nature, 2008] is similar, the main difference is: we require one site ``belongs'' to only one TF, simplifying the computation. 
+
+Remark: the range of parameter values for DNA binding. 
+\begin{itemize}
+\item $[\text{TF}]$: 1 to 10000 nM from [Buchler \& Hwa, PNAS, 2003], or $10^{-9} - 10^{-5} M^{-1}$. 
+\item $K(S_{\max})$: should be in the similar range of $[\text{TF}]$, also from typical values used in simulation from [Veitia, Biol. Rev., 2003]. 
+\item $R = [\text{TF}] K(S_{\max})$: in the range of $10^{-4} - 10^{4}$. The range could still be higher, see [Roider \& Vingron, Bioinformatics, 2007]. 
+\end{itemize}
+
+\item{Predicting expression from regulatory sequences: simple models}
+
+Problem: given a regulatory sequence $S$ with $n$ putative TFBSs, and the concentrations of all TFs involved $[TF_k]$, determine the expression level of the target gene of $S$. 
+
+Assumption: the expression level is proportional to the occupancy of the promoter ($P$), which is determined by the regulatory sequence $S$. 
+
+\begin{enumerate}
+
+\item{Equivalence of thermodynamic and kinetic models}
+
+Consider an enhancer sequence, let $\sigma$ be its configuration (the occupancy states of all its binding sites), then the total weight of all configurations when the promoter is not occupied is: $Z_{OFF} = \sum_{\sigma}W(\sigma)$, 
+where $W(\sigma)$ is the the weight of $\sigma$. And the total weight when the promoter is occupied, factoring out $q_p$, is: $Z_{ON} = \sum_{\sigma}W(\sigma) Q(\sigma)$, where $Q(\sigma)$ is the weight due to interaction with basal transcriptional machineary (BTM). We define the ``efficiency'', $\eta$, of an enhancer sequence as 
+\begin{equation}
+\eta = \frac{Z_{ON}}{Z_{OFF}} = \frac{\sum_{\sigma}W(\sigma) Q(\sigma)}{\sum_{\sigma}W(\sigma)}
+\end{equation}
+The promoter occupancy can then be written as: 
+\begin{equation}
+P = \frac{q_p \eta}{1 + q_p \eta}
+\end{equation}
+If $q_p \eta$ is small, then approximately $P \propto q_p \eta$. On the other hand, without the enhancer, the promoter occupancy is $q_p/(1+q_p) \approx q_p$ since $q_p << 1$ in most eukaryotic promotoers. So $\eta$ can be understood as the number of times the promoter occupancy or transcriptional rate is increased by the enhancer.  
+
+We can see that $\eta$ can also be interpreted in kinetic terms. For any configuration $\sigma$, suppose it can interact with BTM with association constant $K(\sigma)$: 
+\begin{equation}
+S(\sigma) + BTM \rightleftharpoons BTM-S(\sigma)
+\end{equation}
+Furthermore, the fraction of $\sigma$ is: $P(\sigma) = {W(\sigma)}/{\sum_{\sigma}W(\sigma)}$. Therefore, the total fraction of BTM complex, or transcriptional response (TR), is: 
+\begin{equation}
+TR = \sum_{\sigma}P(\sigma) K(\sigma) = \frac{\sum_{\sigma}W(\sigma) K(\sigma)}{\sum_{\sigma}W(\sigma)}
+\end{equation}
+which is exactly the efficiency of the enhancer if define $Q(\sigma) = K(\sigma) / K(\sigma_0)$, where $\sigma_0$ is the state where no TF molecule is bound. Also note that in [Segal08], the expression contribution of any configuration ($P(E|c)$ under their notation), in fact corresponds exactly to the $Q(\cdot)$ terms here. 
+
+Importance of $Q(\sigma)$: under both models, the central part of a transcriptional model is $Q(\sigma)$, the transcriptional effect of the enhancer in state $\sigma$. This is due to the effective number of activator molecules that contact the BTM. 
+
+%Consider a single BS of TF $A$. Suppose the Boltzman weight of the binding of $A$ is $q_A$, the interaction between $A$ and RNAP comple\eta is $\omega_A$. Then $Z_{OFF} = 1 + q_A$, and $Z_{ON} = q_p (1 + \omega_A q_A)$. So the efficiency of $A$ is: 
+%\begin{equation}
+%\eta_A = \frac{1 + \omega_A q_A}{1 + q_A}
+%\end{equation}
+
+\item{Logistic model}
+
+Each occupied TF will make some contribution (TF-specific), activators making positive contribution while repressors negative. The fractional occupancy of a single site $i$ by TF $k$ is given by: 
+\begin{equation}
+p_k(i) = \frac{q_k(i)}{1 + q_k(i)}
+\end{equation}
+The promoter occupancy is a logistic function of the occupancy of all the TFBSs: 
+\begin{equation}
+P = \text{logit}(\alpha_0 + \sum_{k}\alpha_k N_k)
+\end{equation} 
+where $N_k$ is the expected number of bound sites of $k$-th TF: $N_k = \sum_i{p_k(i)}$, $\alpha_k$ is the effect of the $k$-th TF (could be positive if activator, or negative if repressor), and $\alpha_0$ is the basal transcription. 
+
+\item{Direct model}
+
+Assumptions: 
+\begin{itemize}
+\item Each TF is either an activator (TA) or repressor (TR). Binding could be cooperative (between activators; or between repressors). 
+\item Activator binds favorably with RNAP complex; repressor binds unfavorably with RNAP complex. Let $\alpha_k$ be the interaction term between TF $k$ and RNAP complex, then $\alpha_k > 1$ if $k$ is TA; and $\alpha_k < 1$ if $k$ is TR. This is the only way repressor works (i.e., repressor does not directly affect activator binding to DNA, activator cooperativity or activator interaction with RNAP complex). 
+\item Each bound TA or TR molecule contributes independently to RNAP interaction. Or equivalently, the effect of activation or repression is always multiplicative (each bound molecule contributes an energy term). 
+\end{itemize}
+
+The computation of $Z_{OFF}$ is given by Equation~\ref{eq:part_func_off}. To compute $Z_{ON}$, we only need to add the RNAP interaction term. For simplicity, we drop the subscript in $Z_{ON}$. Define $Z(i) = \sum_{\sigma[i]}Q(\sigma[i])$, where $\sigma[i]$ is defined as before, then:
+\begin{equation}
+Z(i) = q(i) \alpha_{f_i} \left[ \sum_{j \in \Phi (i)}\omega(i,j) Z(j) + 1\right]
+\label{eq:expression_simple}
+\end{equation}
+The total $Z_{ON} = 1 + \sum_{i=1}^{n}Z(i)]$. %Or use the similar recurrence in the case of allowing multiple TF matches per site. 
+
+We could simplify the recurrence as before. Let $C(i)$ be the boundary of site $i$, i.e. only when $j > C(i)$, there will be cooperative binding. Let $Z^t(i)$ be the partition function over all enhancer states up to site $i$, where the site $i$ itself may or may not be occupied, i.e.
+\begin{equation}
+Z^t(i) = \sum_{j \leq i} Z(j) + 1
+\end{equation}
+Note that in the above equation, $j$ could overlap with $i$. We would have the following recurrences: 
+\begin{equation}
+Z(i) = q(i) \alpha_{f_i} \left[ \sum_{j \in \Phi (i), j > C(i)} \omega(i,j) Z(j) + Z^t(C(i)) \right]
+\end{equation}
+\begin{equation}
+Z^t(i) = Z(i) + Z^t(i-1)
+\end{equation}
+The initial condition is given by: $Z^t(0) = 1$. And the final result is: $Z_{ON} = Z^t(n)$ where $n$ is the last site. 
+
+\end{enumerate}
+
+\item{Modeling transcriptional activation}
+
+\begin{enumerate}
+
+\item{Modeling transcriptional activation}
+
+For any bound TA molecule, it will interact favorably with the RNAP complex, and contribute a binding energy to the total configuration. Our problem is: given multiple bound TA molecules, how their effects are combined. There are two scenarios, in the first one, the bound TA molecules interact with different parts of the RNAP complex (or more generally, different steps of transcription initiation), then the energy terms can be added, or we can say their effects are multiplicative (wrt. the reaction rate). Let $\omega_{A_i}$ be the interaction term for $A_i$, then the total interaction is $\prod_i{\omega_{A_i}}$. In the second scenario, the bound TA molecules interact with the same part of the complex (in particular, the same type of TA), then only one TA molecule can interact with RNAP complex at any time. In other words, there exist multiple micro-states, in each micro-state, at most one TA molecule interacts with the complex. So the total interaction term is $1 + \sum_i{\omega_{A_i}}$. 
+
+Example: consider a configuation $\sigma$ where two $A_1$ sites and one $A_2$ site are occupied, then ignoring binding cooperativity, the weight of $\sigma$ is $2 \omega_{A_1} \omega_{A_2} q_{A_1}^2 q_{A_2} q_p$. 
+
+Note: there are evidences of both multiplicative and additive interactions between different TFs. See [Buchler \& Hwa, PNAS, 2003], and [Molina-Lopez \& Santero, Mol. Gen. Genet., 1999] for the lack of synergy between different TAs in E.coli. It would be interesting to know how multiple sites of the same TF contribute to activation. 
+
+\item{Transcriptional activation: synergistic effect}
+
+Model: there are two basic ways of parameterizing $Q(\sigma)$: synergistic (multiplicative) or non-synergistic (additive). Suppose $\alpha_A$ is the interaction of activator $A$ with the BTM: 
+\begin{itemize}
+\item In the first model, the weights of BTM binding of two bound molecules are multipilied: suppose there are $n$ activator molecules bound in $\sigma$, then $Q(\sigma) = \alpha_A^n$. 
+
+\item Un the second model, the weights are added: $Q(\sigma) = n \alpha_A$. 
+\end{itemize} 
+
+To compare the two models, we consider an enhancer of $n$ identical activator sites. Let $\omega_{AA}$ be the cooperativity parameter (equal to 1 if there is no cooperative binding), $q_A$ be the binding weight of one site, and $\alpha_A$ be the binding with BTM. In both models, we have: 
+\begin{equation}
+Z_{OFF} = 1 + \sum_{i=1}^n {n \choose i}q_A^i \omega_{AA}^{i-1} = 1 + \frac{(1+\omega_{AA}q_A)^n - 1}{\omega_{AA}}
+\end{equation}
+The term $Z_{ON}$ is different. Under the multiplicative model, the configuration where $i$ sites are bound has $Q(i) = \alpha_A^i$, i.e. each bound molecule contribute a certain free energy to BTM binding. We have:
+\begin{equation}
+Z_{ON}^{1} = 1 + \sum_{i=1}^n {n \choose i}q_A^i \omega_{AA}^{i-1} \alpha_A^i = 1 + \frac{(1+\omega_{AA}q_A \alpha_A)^n - 1}{\omega_{AA}}
+\end{equation}
+Under the additive model, the configuration where $i$ sites are bound has $Q(i) = i \alpha_A$, i.e. at one time, only one bound molecule can interact with BTM. We have: 
+\begin{equation}
+Z_{ON}^{2} = 1 + \sum_{i=1}^n {n \choose i}q_A^i \omega_{AA}^{i-1} i \alpha_A = 1 + n \alpha_A q_A (1+\omega_{AA}q_A)^{n - 1}
+\end{equation}
+
+Synergy under the multiplicative model: under this model, synergy among multiple sites can be achieved even when there is no cooperative binding. Note that we define synergy as: $\eta_n >> n \eta_1$. Assuming $\omega_{AA} = 1$, we have: 
+\begin{equation}
+\eta_n = \left( \frac{1 + \alpha_A q_A}{1 + q_A} \right)^n
+\end{equation}
+
+Synergy under the additive model: under this model, synergy could be achieved through the direct interaction between the bound molecules. Consider the case where $n = 2$:  
+\begin{equation}
+Z_{OFF} = 1 + 2 q_A + \omega_{AA} q_A^2
+\end{equation}
+\begin{equation}
+Z_{ON} = q_p (1 + 2 \omega_A q_A + 2 \omega_A \omega_{AA} q_A^2)
+\end{equation}
+The efficiency in this case cannot be factorized. To simplify the analysis, we assume $\omega_A = \omega_{AA} = \omega$. So we have:
+\begin{equation}
+\eta_{2} = \frac{1 + 2 \omega_A q_A + 2 \omega_A \omega_{AA} q_A^2}{1 + 2 q_A + \omega_{AA} q_A^2} = \frac{1 + 2 \omega q_A + 2 \omega^2 q_A^2}{1 + 2 q_A + \omega q_A^2}
+\end{equation}
+At low concentration of A, $q_A$ is small, $\omega q_A$ can be relatively large and $\omega q_A^2$ is also small. So $\eta_1$ can be approximated as $1 + \omega q_A$, and $\eta_{2} \approx 1 + 2 \omega q_A + 2 \omega^2 q_A^2$. The last term $(\omega q_A)^2$ contributes to the synergy between two adjacent sites of $A$. 
+
+Failure of synergy of additive model at high concentration: when $q_A$ is large, we could approximate as:
+\begin{equation}
+\eta_n \approx \frac{n \alpha_A q_A \omega_{AA}^{n-1} q_A^{n-1}}{\omega_{AA}^{n-1} q_A^n} = n \alpha_A
+\end{equation}
+Therefore, at high concentration, there is no synergy under the additive model, even with cooperative binding. 
+
+\item{Synergy between different TAs}
+
+Next we consider the situation where there are one site for $A$ and the other for $B$. Suppose there is no cooperative interaction between bound molecules of $A$ and $B$. We have: 
+\begin{equation}
+Z_{OFF} = (1+q_A) (1+q_B)
+\end{equation}
+\begin{equation}
+Z_{ON} = q_p (1 + \alpha_A q_A + \alpha_B q_B + \alpha_A \alpha_B q_A q_B) = q_p (1 + \alpha_A q_A) (1 + \alpha_B q_B)
+\end{equation}
+So the efficiency of the two sites is: 
+\begin{equation}
+\eta_{A,B} = \frac{1 + \alpha_A q_A}{1 + q_A} \frac{1 + \alpha_B q_B}{1 + q_B} = \eta_A \eta_B
+\end{equation}
+In general $\eta_A >> 1, \eta_B >>1$, so $\eta_A \eta_B >> \eta_A + \eta_B$, giving the synergistic effect between $A$ and $B$ despite that the proteins $A$ and $B$ do not directly interact. 
+
+\item{Partition function involving additive and multiplicative interactions}
+\label{item:part_func}
+
+Suppose we have multiple types of TFs, some of which could interact with RNAP. The mode of interaction is multiplicative for different types of TF molecules, and additive for the same type of TF molecules. Let $V$ be the set of TFs that interact with RNAP complex, and $\omega_k$ be the interaction weight of $k \in V$. We want to compute $Z = q_p \sum_{\sigma}Q(\sigma)$. Because both types of interactions may occur, the recurrence like Equation~\ref{eq:expression_simple} cannot be applied. For each type of TF $\in V$, we assume that there is a ``pocket'' in RNAP complex, which can be occupied by only single bound TF molecule (or not occupied). So we will introduce an additional variable $\phi_k$ into $\sigma$ for any $k \in V$: $\phi_k = 1$ means the $k$-th pockeet is occupied and $\phi_k = 0$ means it is not occupied. We also use the notation $\phi|\phi_k=x$ to represent the pocket states where the $k$-th pocket has a specific value $x$. A configuration up to site $i$, where $i$ is occupied and the pocket state vector is $\phi$, is represented as $\sigma[i,\phi]$. We start with $f(i) \in V$. For the case $\phi_{f_i} = 0$, the site $f_i$ cannot interact with RNAP, we have: 
+\begin{equation}
+Q(\sigma[i,\phi|\phi_{f_i}=0]) = q_{f_i}(i) \omega(f_i, f_j, d(i,j)) Q(\sigma[j,\phi|\phi_{f_i}=0])
+\end{equation}
+where $j$ is the nearest bound site to $i$. For the case $\phi_{f_i} = 1$, we have two possibilities: either the pocket is already occupied by the configuration up to $j$, or not: 
+\begin{equation}
+%\begin{array}{ll}
+Q(\sigma[i,\phi|\phi_{f_i}=1]) = q_{f_i}(i) \omega(f_i, f_j, d(i,j)) \left[ Q(\sigma[j,\phi|\phi_{f_i}=1]) +  Q(\sigma[j,\phi|\phi_{f_i}=0]) \omega_{f_i} \right]
+%$\end{array}
+\end{equation}
+Define the variable: 
+\begin{equation}
+Z(i,\phi) = \sum_{\sigma[i,\phi]}Q(\sigma[i,\phi])
+\end{equation}
+Summing over configurations, we have the recurrences:
+\begin{equation}
+Z(i,\phi|\phi_{f_i}=0) = q_{f_i}(i) \left[ \sum_{j \in \Phi (i)}\omega(f_i, f_j, d(i,j)) Z(j,\phi|\phi_{f_i}=0) + 1\right]
+\end{equation} 
+\begin{equation}
+Z(i,\phi|\phi_{f_i}=1) = q_{f_i}(i) \left[ \sum_{j \in \Phi (i)} \omega(f_i, f_j, d(i,j)) [Z(j,\phi|\phi_{f_i}=1) +  Z(j,\phi|\phi_{f_i}=0) \omega_{f_i}] + 1 \right]
+\end{equation}
+If $f_i \notin V$, we will have a single recurrence for all $\phi$: 
+\begin{equation}
+Z(i,\phi) = q_{f_i}(i) \left[ \sum_{j \in \Phi (i)}\omega(f_i, f_j, d(i,j)) Z(j,\phi) + 1\right]
+\end{equation}
+To compute the total $Z$, we have $Z(i) = \sum_{\phi}Z(i,\phi)$, and $Z = q_p [1 + \sum_{i=1}^{n}Z(i)]$.
+ 
+For the alternative formulation where multiple TFs can match a single site, we have similar recurrences: 
+\begin{equation}
+Z(i,k,\phi|\phi_{k}=0) = q_{k}(i) \left[ \sum_{j \in \Phi (i)} \sum_{k' \neq 0} \omega(k, k', d(i,j)) Z(j,k',\phi|\phi_{k}=0) + 1\right]
+\end{equation} 
+\begin{equation}
+Z(i,k,\phi|\phi_{k}=1) = q_{k}(i) \left[ \sum_{j \in \Phi (i)} \sum_{k' \neg 0} \omega(k, k', d(i,j)) [Z(j,k',\phi|\phi_{k}=1) +  Z(j,k',\phi|\phi_{k}=0) \omega_{k}] + 1 \right]
+\end{equation}
+And similarly for the case where $k \notin V$. 
+
+\item{Limited contact model}
+
+Model: a realistic way of modeling transcriptional activation is: there is synergism among bound activator molecules when the number is small; reach saturation when there are enough bound activator molecules. This model assumes that: for any state $\sigma$, suppose $N$ is the total number of bound activator molecules (of all different types), the number of activator molecules that could make simultaneous contact with the BTM is no more than $N_0$. More specifically, suppose $\pi$ is a sample of the activator molecules from $\sigma$, and let the effect of $\pi$ be $\alpha^\pi$ (multiplicative effect), then we have: 
+\begin{equation}
+Q(\sigma) = \sum_{\substack{\pi \in \pi(\sigma)\\N(\pi) \leq N_0}} \alpha^\pi
+\end{equation}
+where $N(\pi)$ is the number of bound activator molecules in $\pi$. Note that the transcriptional effect of an activator $\alpha_A$ is defined as the contribution of $A$ when it ``actually'' interacts with BTM. So it should be the effect of $A$ under the unlimited model minus 1 (the interaction term between $A$ and BTM contains two parts: when they actually interact and when not). 
+%\begin{equation}
+%Q(\sigma) = \left\{ \begin{array}{ll}
+%\alpha^N & \text{if $N \leq N_0$}\\
+%\alpha^{N_0} & \text{if $N > N_0$}
+%\end{array} \right.
+%\end{equation}
+
+Example: consider an enhancer of two activators, $N_0 = 1$, $Z_{ON}$ is given by: $1 + q_1( 1 + \alpha_1) + q_2( 1 + \alpha_2) + \omega q_1 q_2 (1 + \alpha_1 + \alpha_2)$. 
+
+Equvalence with [Reinitze] model: under [Reinitz] model, the transcriptional response $R$ satisfies: 
+\begin{equation}
+R = \left\{ \begin{array}{ll}
+R_0 e^{-(QM - \Theta)} & \text{if $QM \leq \Theta$}\\
+R_0 & \text{if $QM > \Theta$}
+\end{array} \right.
+\end{equation}
+where $M$ is the number of bound AF molecules (similar to $N$), and $\Theta / Q$ is the maximum number of AF molecules where synergism is possible. 
+
+Remark: a more general way of modeling limited contact is to allow weighting of different types of activators. So the constraint should be $w_1 N_{A_1}(\sigma) + w_2 N_{A_2}(\sigma) \leq N_0$, where $w_1$ and $w_2$ are the weights of the two types of activators. The $w$ term can be interpreted as the number of adaptor factors recruited by the activator, and the constrain is applied to the total number of AFs. This is the assumption made by [Reinitze] model. 
+
+\item{Modeling additional cooperativity between GTFs}
+
+Suppose there are $N$ occupied activator molecules, want to model the transcriptional effect $Q(N)$. Assume each activator recruites one or more GTFs, these GTFs themselves can have interactions. Several ways of quantifying these additional cooperativities: either by using Hill equation, or by explicit modeling of additional interactions. 
+\begin{itemize}
+\item Hill equation [Reinitz]: phenomenological model of cooperativity. Let $N$ be the number of sites of adaptor factors (AFs) in the activator molecules, $K_{AF}$ be the equilibrium constant of binding of AF to its sites, and [AF] be its concentration, then the number of bound AF molecules is: 
+\begin{equation}
+M = N \frac{(K_{AF}[AF])^n}{1 + (K_{AF}[AF])^n}
+\end{equation}
+where $n$ is the Hill coefficient. Note that if $n$ is constant, then $M$ is simply proportional to $N$. 
+
+\item If there are only interactions between two ``adjacent'' AFs, then the total energy is proportional to $N$, i.e. $\log Q(N) \propto N$. 
+
+\item If any two AFs could interact, then the total energy is $O(N^2)$, i.e. $\log Q(N) \propto N^2$. 
+  
+\end{itemize}
+
+\item{Related work}
+
+Consider for example the model by [Zinzen \& Papatsenko, Curr Biol, 2006]. It assumes that an enhancer is active if some activator and no repressor is bound. Suppose we have an enhancer with 2 sites of $A$ and $B$ respectively. Let $p_A$ and $p_B$ be the fractional occupancies of the two sites, then the probability of the enhancer being active is $p_A + p_B - p_A p_B$. No synergistic effect is modeled. 
+
+Under the model by [Segal \& Gaul, Nature, 2008], if there is no interaction between the two TAs, they will bind independently, but their contribution to the expression is synergistic. The term $e^{\sum_i{w_{f(i)}}}$ corresponds to the efficiency of a sequence, thus the effect of sites is always multiplicative, whether they are of the same TF or not. 
+
+\item{Issues}
+
+\begin{itemize}
+
+\item Effect of sequence length: longer sequences will have more binding events, and thus higher expression. Indeed, the problem is when modeling of transcriptional synergy by multiple contact, the distances between sites are ignored: two distant sites may not be able to interact with BTM simultaneously. One could incorporate the distance effect by adding an energy term that depends on distance, but that is generally difficult. This is not a problem for the pure cooperative binding models. 
+
+\item Effect of TFBS arrangement: this is related to the sequence length issue. Basically, TFBS arrangement affects cooperative binding, and probably more importantly, on the extent of multiple contact with BTM. It may happen that: only when the sites are arranged in a specific fashion (including the order, orientation, distance, etc.), they can form stable complex with BTM and start transcription. This is what has been suggested by the enhancersome model, but has been ignored for the current activation model. 
+	
+\end{itemize}
+
+\end{enumerate}
+
+\item{Modeling short-range repression}
+
+Overview: under the short-range repression models, the target of a repressor is an adjacent activator (instead of BTM). The repression can be achieved in two ways: 
+\begin{itemize}
+\item Activator quenching: repressor does not affect activator binding to DNA, but blocks the activator binding to BTM (make the activator unavailable/unproductive); 
+\item Reducing activator binding: Repressor directly reduces the activator binding to DNA. 
+\end{itemize}
+One additional mechanism of repression is: the repressor blocks the cooperative interactions among bound activator molecules. Also note that the short-range repression need not be one-to-one, i.e. one repressor can repress only one nearby activator. It is conceivable that a repressor may recurit multiple co-repressors that simultaneously shut down multiple nearby activators. However, this will create non-local dependency among sites, and make inference/computation difficult. For this reason, all the models below will assume a repressor can turn off at most one nearby activator. 
+
+\begin{enumerate}
+
+\item{Modeling transcriptional repression: protein-protein interaction}
+
+Let $S$ be the substrate (DNA molecule), $A$ be the activator or RNAP complex that directly binds $S$, and $R$ be the repressor. We have an reaction: $A + S \rightleftharpoons AS$, and $R$ can block this reaction. Generally speaking, $R$ can do this by one of the two mechanisms: (i) $R$ interacts with $A$ s.t. $A$ molecules are no longer available for interacting with $S$; (ii) $R$ facilitates conversion of $A$ into some other form that is not favorable for the reaction. Our generic model assumes that: there are two forms of $A$, the active form $A_1$ and the inactive form $A_0$. $R$ functions by stabilizing the inactive form $A_0$ s.t. the number of available molecules of $A_1$ is reduced. We quantify these relations in statistical mechanical terms. The subsystem, $S$, could exist in three forms: (i) unbound; (ii) bound by $A_0$; (iii) bound by $A_1$. Without $R$, the statistical weights of the three states are $1$, $q_0$ and $q_1$ respectively; with $R$, the weights should be $1$, $q_0 (1 + \omega_R)$ and $q_1$, where $\omega_R$ represents the interaction between $R$ and $A_0$ ($R$ may or may not actually interact with $A_0$, so we have $1 + \omega_R$). Out of the three states, only the state (iii) is a functional state (DNA can be transcribed). If there are multiple repressors, their total effect is captured by the total statistical weight of state (ii). 
+
+There is an approximate way of quantifying the effect of repression, where we consider the ``effective'' weight of bound state, $q_1'$, pretending that $S$ exists in only two forms: unbound and bound. The probability of $S$ being in the functional state should be equal under the two-state and the three-state scenarios:
+\begin{equation}
+\frac{1}{1 + q_1'} = \frac{1 + q_0 \omega_R}{1 + q_0 \omega_R + q_1}
+\end{equation} 
+Suppose $\omega_R >> 1$, solving $q_1'$: $q_1' = q_1/(1 + q_0 \omega_R)$. Effectively, $q_1$ is reduced by $\alpha_R = 1/(1 + q_0 \omega_R)$. This has a simple interpretation: the effect of a repressor is to reduce the binding of $A$ to $S$ by a fraction $\alpha_R$ that is specific to $R$ molecule, or as if the total energy of the system is less favorable by a term $-\ln \alpha_R$ in the presence of $R$. If there are multiple $R$ molecules, their total effect is captured by the effect on $\omega_R$. If they work multiplicatively (different types of $R$ molecules that work at different parts of $A$), then $\omega_R = \prod_{i}\omega_{R_i}$, and this leads to $\alpha_R \approx \prod_i{\alpha_{R_i}}$ assumming $\omega_{R_i} >> 1$. If they work additively (work at the same part of $A$), then $\omega_R = \sum_{i}{\omega_{R_i}}$, and this leads to $\alpha_R \approx (\sum_i{\frac{1}{\alpha_{R_i}}})^{-1}$. Note that in making the approximations for $\alpha_R$, we have made the assumption that $q_0 = q_1 = 1$, i.e. the inactive form $A_0$ could bind to $S$ as well as $A_1$, the only difference being that $A_0$ cannot initiate the transcription. 
+
+\item{Modeling transcriptional repression: alternation of chromatin structure}
+
+Assumption: change of chromatin structure by the repressor molecules is a fast process, reaching equilibrium before the binding event of the relevant TA molecules could happen. 
+
+Transcription repression can be also achieved by changing local chromatin structure by bound repressor molecules through histone deacetylation or chromatin remodeling. The new structure will make activator binding more difficult. Suppose the chromatin has two states: open state (where TA can bind) and closed state (where TA cannot bind). The bound TR molecule will change the equilibrium between the open and closed states of the chromatin. We could imagine that $R$ stabilize the closed state (even though the actual mechanism is recruitment of related proteins). Suppose the interaction between $R$ and the closed state is $\omega_R$ and that between $R$ and the open state is $1$, then the fraction of open states in the presence of $R$ becomes:
+\begin{equation}
+\alpha_R = \frac{1}{1 + \omega_R}
+\end{equation}
+Let the statistical weight of DNA binding of TA be $q_A$, then we could define the new statistical weight of TA binding is $q_A' = \alpha_R q_A$. In other words, the effect of $R$ is to reduce the binding of adjacent TA molecule by $\alpha_R$. 
+
+When there are multiple bound TR molecules, again, the effects can be multiplicative or additive. Similar to the derivation above, in the first case, we have $\alpha_R \approx \prod_i{\alpha_{R_i}}$; and in the second case, we have $\alpha_R \approx (\sum_i{\frac{1}{\alpha_{R_i}}})^{-1}$. In practice, we only consider the effect of two flanking repressor molecules (if there are any) to any bound activator molecules, so we have $\alpha_R = \alpha_{R_1} \alpha_{R_2}$ or $\alpha_R = (1/\alpha_{R_1} + 1/\alpha_{R_2})^{-1}$. 
+
+\item{Therymodynamic model with quenching}
+
+Assumptions: 
+\begin{itemize}
+\item TA molecules stimulate transcription by interacting with RNAP complex. The mode of interaction is additive for TA molecules of the same type; and multiplicative for TA molecules of different types. 
+\item TR molecules repress the binding of adjacent TA molecules by short-range quenching: i.e. they change the local chromatin structure s.t. TA cannot bind. But a bound TR molecule will not change the affinity of binding of another TR molecule in this region, i.e. assuming that TR binding (possibly cooperative) occurs before the change of chromatin structure. 
+\item The effect of each TA is modified only by its adjacent TR molecule(s) (at most two), and their effects are assumed to be multiplicative regardless of whether the TR molecules are of the same type. 
+\end{itemize}
+
+The effect of queching of a repressor $R$ to an adjacent activator molecule $A$ that is $d$ bps away is: $\alpha_R(d) = \alpha_R \gamma(d)$. Thus effectively, instead of modifying $q_A$, we simply assume that there is a PPI term between $A$ and $R$, $\omega(A,R,d) = \alpha_R \gamma(d)$. We also assume multiplicity of the repressor terms, just as the PPI terms. Therefore, the effects of repressors are completely absorbed into $\omega$ terms. 
+
+The computation of $Z_{OFF}$ can be done using Equation~\ref{eq:part_func_off}. The computation of $Z_{ON}$ can be achieved using the procedure in Section~\ref{item:part_func}. Only the activators will be included in the set of state variables $V$. 
+
+\item{Therymodynamic model with direct repression}
+
+Assumptions: 
+\begin{itemize}
+\item TA molecules stimulate transcription by interacting with RNAP complex. The mode of interaction is additive for TA molecules of the same type; and multiplicative for TA molecules of different types. 
+\item TR molecules repress transcription also by interacting with RNAP complex. However, this interaction is unfavorable, i.e., it blocks the binding of active RNAP complex to the promoter. The mode of interaction follows the same rules as TA.  
+\end{itemize}
+
+Under this model, the promoter has three states: (i) unbound; (ii) bound by an inactive form of RNAP; (iii) bound by the active RNAP. Only the third case will lead to transcription. Let the partition functions of the three cases be $Z_{OFF}$, $Z_{INACT}$ and $Z_{ON}$ respectively. Then, we have: 
+\begin{equation}
+P = \frac{Z_{ON}}{Z_{ON} + Z_{OFF} + Z_{INACT}}
+\end{equation}
+Note that in the currrent model, repressors work by directly interacting with RNAP complex, so the terms $\omega(A,R,d)$ will be 1 for any activator-repressor pair $(A,R)$. 
+
+Again, the computation of $Z_{OFF}$ can be done using Equation~\ref{eq:part_func_off}. The computations of both $Z_{INACT}$ and $Z_{ON}$ can be done using the procedure described in Section~\ref{item:part_func}. In state (ii), there is no interaction between activators and inactive RNAP, so the variable $\phi$ in $Z(i,\phi)$ will only cover repressors; in state (iii), there is no interaction between repressors and active RNAP, so the variable $\phi$ in $Z(i,\phi)$ will only cover activators. In addition, the promoter binding term should be $q_{p,0}$ for $Z_{INACT}$, and $q_p$ for $Z_{ON}$. To avoid one more extra parameter, one may assume that the inactive form of RNAP complex can bind to the promoter as well as the active form, so $q_{p,0} = q_p$.  
+
+\item{Simple activator quenching}
+
+Model: in an enhancer state $\sigma$, any bound activator molecule adjacent to some bound repressor molecule will be ineffective (distance less than some threshold $d_0$), but the rest can contact with BTM. TF binding is not affected. 
+
+Remark: the main problem under this model (and the next general version) is about the stoichoimetry of activators and repressors. Because a repressor can only suppress its neighbor activator, it may happen that some activators remain unsuppressed even if they are within the range of repressors. For example, an enhancer of two activators and one repressor, then no matter how strong the repressor is, some activator will always be un-suppressed. 
+
+\item{Partial activator quenching}
+
+Model: in an enhancer state $\sigma$, any bound activator molecule adjacent to some bound repressor molecule will be partially ineffective (distance less than some threshold $d_0$), but the rest can contact with BTM. TF binding is not affected. The partial repression is modeled by: the repressed activator can take two states - productive (cannot interact with BTM) or unproductive (can interact with BTM). Let $\delta$ be the probability of the productive state (intepreted as the probability the activator escapes the repressor), then $1 - \delta$ is the probability of the unproductive state. The transcriptional effect is now the average of the two states: $\delta \alpha_A + (1-\delta)$. Issues under this model:
+\begin{itemize}
+\item The combined effect of multiple repressors: suppose two repressors both act on an activator with effect $\delta_1$ and $\delta_2$ respectively, then the probability of being productive is the probability that the activator escapes both repressors: $\delta = \delta_1 \delta_2$. 
+\item The total transcriptional response of an enhancer: suppose there are $n$ activator sites with each $\delta_i$ be the partial repression of the site $i$, then the total repsonse is: $Q(\sigma) = \prod_{i=1}^m [\delta_i \alpha_A + (1-\delta_i)]$. 
+\item Constraint of limited contact: can be expressed as, the expected number of productive activator molecules should not be greater than $N_0$, which is $\sum_i \delta_i \leq N_0$. 
+\end{itemize}
+
+Remark: the simple quenching model is a special case of the partial quenching model with $\delta = 0$. Thus the partial model is necessary if wants to reduce the strength of repression. 
+
+\item{Ranged repression}
+
+Model: in an enhancer state $\sigma$, the effect of any bound activator molecule will be reduced by all repressors that are bound in a range (distance less than some threshold $d_0$). For each type of activator molecules, we can define the ``effective'' number of bound activators and the total contribution of $\sigma$ is: 
+\begin{equation}
+Q(\sigma) = \alpha_1^{N_e(A_1)} \cdots \alpha_K^{N_e(A_K)}
+\end{equation}
+where $N_e(A_k)$ is the effective number of activator molecules $A_k$ in the state $\sigma$. To model saturation, we can set a maximum $Q$ (see [Reinitz]). The effective contribution of any bound molecule is defined as $\beta_1 \cdots \beta_n$ where $\beta_i$ is the repression effect of the $i$-th repressor within the range. The function form of $\beta$ can be taken as the one in [Reinitz], e.g. $\beta = 0$ if $d < 50$; $\beta = 1$ (no effect) if $d > 150$ and smooth interpolation between. 
+
+Remark: 
+\begin{itemize}
+\item Even if the main mechanism of repression is the reduced activator binding by chromatin modification, the effect of chromatin modification may be absorbed into $q_R$ under the quenching model. For example, suppose when $R$ is bound, it will change the states of neighborhood s.t. activators cannot bind. But this is effectively: the enhancer state where only $R$ is bound is high. This can be approximated by setting large $q_R$. One problem is: under high $q_R$, the state where both $A$ and $R$ are bound has high weight; but this is OK under the quenching model because this state will not contribute to transcription. 
+
+\item Ranged repression can achieve strong repression effect: simply by letting the distance threshold be large and choosing a strong repression function $\beta$. In the extreme case, any repressor binding will shut down the whole enhancer, which is equivalent to the [Zinzen-Papatsenko] model. 
+
+\end{itemize}
+
+\item{Activator quenching via PPI: complete repression of activators}
+
+Physical idea: a bound $R$ molecule will form a complex with the bound adjacent $A$ molecule, thus making it unavailable to BTM. The affinity between $A$ and $R$ determines the strength of repression. 
+
+Simple model: the binding needs to consider the interaction between $A$ and $R$. To get the transcriptional response of an enhancer state $\sigma$, assume that a bound activator will interact with its neighbor repressor (if present) and not available for BTM (similar to the simple activator quenching model). 
+
+Remark: this model has an unintended consequence: the repressor helps recruit the activator to the enhancer. Even though this recruited activator is not productive, it may bind cooperatively with other adjacent activators, which may be productive. Therefore, the net effect of the repressor may actually be stimulatory to transcription. For example, consider an enhancer of three sites $A_1$, $A_2$ and $R$. Assume that without $R$ binding, the enhancer is dominated by the empty state, $\emptyset > A_1 A_2 > A_1, A_2$, thus the response is small; suppose $A_2$ and $R$ have very strong interaction, then with $R$ binding, the dominated state is $A_1 A_2 R$, which is transcriptionally productive because of $A_1$, and the total transcription is high. To make this model theoretically consistent, should drop the cooperative binding among activators. 
+
+\item{Activator quenching via PPI: competitive binding of repressor}
+
+Model: suppose the interaction between $A$ and $R$ is $\omega_{AR}$, then when they actually do not interact, with weight 1, the $A$ molecule can interact with BTM; with weight $\omega_{AR} - 1$, $A$ binds with $R$ and is N.A. for BTM. For example, consider an enhancer of two adjacent sites of $A$ and $R$. It has five states, in addition to the normal 4. When $R$ is bound, $A$ can be two forms, one interacting with $R$ (represented as $1^-$), the other with BTM (represented as $1^+$). The transcriptional reponse is roughtly the probabilty that $A$ is bound in an active form:
+\begin{equation}
+p_A = \frac{q_A (1 + q_R)}{1 + q_A + q_R + \omega_{AR} q_A q_R}
+\end{equation}  
+When $\omega_{AR} = 1$, it reduces to $p_A = q_A / (1 + q_A)$, i.e. no repression; when $\omega_{AR} \rightarrow \infty$, $p_A \rightarrow 0$, i.e. no transcription. In general, for any enhancer configuration, a bound $A$ molecule can either interact with a bound $R$ molecule or BTM. 
+
+\begin{table}[h]
+	\centering
+		\begin{tabular}{ll|l}
+			\hline
+			A & R & W \\
+			\hline
+			0 & 0 & 1\\
+			1 & 0 & $q_A$\\
+			0 & 1 & $q_R$\\
+			$1^+$ & 1 & $q_A q_R$\\
+			$1^-$ & 1 & $(\omega_{AR}-1) q_A q_R$\\
+			\hline
+		\end{tabular}
+		\caption{Statistical weights of all states under activator masking model}
+		\label{tab:activator-masking}
+\end{table}
+
+Inference: to compute $Z_{ON}(i)$, where the last site is bound by $A$, suppose the nearest bound site is $j$, and it is a repressor, then $A$ can either bind with $R$ or bind with BTM, the contribution of this $j$ is: $(\omega_{AR} + \omega_{AP}) q_A Z_{ON}(j)$. On the other hand, when the last site is bound by $R$, and the site at $j$ is an activator site, the contribution of this $j$ is: $\omega_{AR} q_R Z_{ON}(j)$. 
+
+Remark: this is a more general version of the model above, thus it has the same problem of increased cooperative binding due to repressor-activator interaction. Need to drop cooperative binding among activators. 
+
+\item{Reducing activator binding to DNA via chromotin modification: modeling chromatin states}
+
+Physical idea: repressor binding recruits chmoatin modification enzymes, which change the state of the neighboring chromatin (make them closed for binding). The chromatin can no longer bind with activator molecules. How likely the closed state is taken is determined by the repressor strength and the distance. 
+
+Model: the enhancer can now take more configurations, any repressor site can be either bound (1) or unbound (0) as before; but any activator site can be bound (1), open but unbound (0), or closed (-1). The weights of the new configuations can be determined by considering the reactions among configurations. For example, for an enhancer with one $A$ and one $R$ site, suppose $\bar{A}R$ is the state where $R$ is bound and $A$ is closed, then the system now has one more reaction: 
+\begin{equation}
+R \rightleftharpoons \bar{A}R \quad \beta_R(d)
+\end{equation}
+where $\beta_R(d)$ is the equlibrium constant of the reaction. The probability of $A$ binding is: 
+\begin{equation}
+p_A = \frac{q_A (1 + q_R)}{(1 + q_A)(1 + q_R) + \beta_{R} q_R}
+\end{equation}  
+when $\beta_R = 0$, $p_A = q_A/(1+q_A)$, i.e. no repression; when $\beta_R \rightarrow \infty$, $p_A \rightarrow 0$, i.e. no transcription. The difficulties of this model are: 
+\begin{itemize}
+\item The dependence of $\beta_R$ on distance. 
+\item How the effects of multiple repressors are combined at any point in the chromosome. 
+\end{itemize}
+Assume that chromatin state change is caused by the propagation/extension of chromatin modifying activities along the chromatin with random stopping (a probability to stop at any position), then: 
+\begin{itemize}
+\item $\beta_R$ has geometric form: $\beta_R = \beta_0 \rho^d$, where $\beta_0$ is the maximum, and $d$ distance to the repressor site.  
+\item A position is ON iff the chromatin modifying activity of none of the repressor has reached this position. 
+\end{itemize}
+
+Remark: the analogy is: each repressor site creates a field in the chromosome and the different fields are added at each position in the chromosome. 
+
+\item{Reducing activator binding to DNA via chromotin modification via chromotin modification: modified BGH model}
+
+Supppose we have two adjacent sites $A$ and $R$. Once $R$ is bound, the neighboring chromosome will be in closed state, and the binding of $A$ to its site will be reduced by a fraction $\alpha_R$ (more difficult to bind). Table~\ref{tab:short-range-repr} shows the statistical weights of all states. 
+
+\begin{table}[h]
+	\centering
+		\begin{tabular}{ll|l}
+			\hline
+			A & R & W \\
+			\hline
+			0 & 0 & 1\\
+			1 & 0 & $q_A$\\
+			0 & 1 & $q_R$\\
+			1 & 1 & $\alpha_R q_A q_R$\\
+			\hline
+		\end{tabular}
+		\caption{Statistical weights of all states under the modified BGH model}
+		\label{tab:short-range-repr}
+\end{table}
+
+Then the occupancy of $A$ site is: 
+\begin{equation}
+p_A = \frac{q_A + \alpha_R q_A q_R}{1 + q_A + q_R + \alpha_R q_A q_R}
+\end{equation}   
+When $\alpha_R$ is small, $p_A \approx q_A / (1+ q_A + q_R)$, so the occupancy of $A$ is reduced. Meanwhile, the occupancy of $R$ is also reduced: $p_R \approx q_R / (1+ q_A + q_R)$. The interpretation is: the chromosome has two states, the open state corresponds to $R$ not binding and the close state corresponds to $R$ binding. Since $A$ preferrably binds to the open state, i.e. the open state is stabilized by $A$ binding, this reduces binding of $R$. 
+
+\item{Related work}
+
+Reinitz model: Each nearby repressor site will reduce the binding by a certain fraction, and the effects are multiplicative. For example, consider a case where one activator sites is neighbored by $n$ idential repressor sites, and the repressor sites are strong (full repression). The occupancy of the activator site is: 
+\begin{equation}
+p_A = \left( \frac{1}{1+q_R} \right)^n \frac{q_A}{1+q_A}
+\end{equation}
+Under the same assumption, the modified BGH model gives the following occupancy (A is occupied if none of the repressor site is occupied): 
+\begin{equation}
+p_A = \frac{q_A}{q_A + (1 + q_R)^n} = \frac{q_A}{1+q_A} \cdot \frac{1 + q_A}{q_A + (1+q_R)^n} \approx \frac{q_A}{1+q_A} \cdot \frac{1}{(1+q_R)^n} 
+\end{equation}
+when $q_A$ is small. Therefore, the two models produce similar behavior for short-range repression. 
+
+Zinzen-Papatsenko model: The interpreation of short-range repression is different: the total weight when both $A$ and $R$ are occupied, $q_A q_R$ will be split to $\delta q_A q_R$, where $A$ is active, and $(1 - \delta) q_A q_R$, where $A$ is inactive. It is supposed that $A$ has two forms that are indistinguishable for binding, but behave differently for other interactions (with BTM this case). 
+
+\end{enumerate}
+
+\item{Quenching model with defined TF roles}
+
+\begin{enumerate}
+
+\item{Model: short-range repression and limited contact}
+
+The transcriptional response of an enhancer sequence is given by: 
+\begin{equation}
+\eta = \sum_{\sigma}P(\sigma) Q(\sigma) = \frac{\sum_{\sigma}W(\sigma) Q(\sigma)}{\sum_{\sigma}W(\sigma)}
+\end{equation}
+where $W(\sigma)$ is the weight of an enhancer state $\sigma$ due to TF binding, and $Q(\sigma)$ is the transcriptional effect of $\sigma$. Let $Z_{OFF} = \sum_{\sigma}W(\sigma)$ be the toal weight when the BTM is not bound, and $Z_{ON} = \sum_{\sigma}W(\sigma) Q(\sigma)$ be the total weight when the BTM is bound. The specification of $W(\sigma)$ and computation of $Z_{OFF}$ is given by Equation~\ref{eq:part_func_off}. $Q(\sigma)$ is specified by the activation and repression models. 
+\begin{itemize}
+\item The repression model specifies that: any activator adjacent to a repressor will not be effective (completely turned off), where adjacency is defined by a distance threshold $d_0$. 
+\item The activation model specifies that: any un-repressed activator, $A$, will contribute $\alpha_A$ to $Q(\sigma)$ in a multiplicative fashion; however, the total number of activator molecules in $\sigma$ making contribution cannot exceed a constant $N_0$. 
+\end{itemize}
+
+\item{Computing $Z_{ON}$ under the repression model}
+
+Idea: the basic idea is summing over $\sigma$ via dynamic programming. Note that the presence of a repressor in either side of an activator can turn it off. Therefore, for any activator, need to remember if it has already been shut off by the repressor preceding it (in the DP sense, to the left): if yes, then it will always be off; if no, then another repressor following it will turn it off, but not an activator or a distant repressor. 
+
+Notation: we define $\sigma_1[i]$ be an enhancer configutation where the last site $i$ is occupied, but not repressed (if it is an activator); and $\sigma_0[i]$ be a configuration where the last site $i$ is occupied, and repressed by a preceding repressor (if it is an activator). Note that if $i$ is a repressor, then only $\sigma_1[i]$ is defined, i.e. $Q(\sigma)$ for $\sigma_0[i]$ should be 0. We define the recurrence variables: 
+\begin{equation}
+Z_1(i) = \sum_{\sigma_1[i]} W(\sigma) Q(\sigma)
+\end{equation}
+\begin{equation}
+Z_0(i) = \sum_{\sigma_0[i]} W(\sigma) Q(\sigma)
+\end{equation}
+The distance between two sites $i$ and $j$ is $d(i,j)$, and for simplicity, the PPI between two bound activators at $i$ and $j$ is simply $\omega(i,j)$, which is in fact $\omega(i,j,d(i,j))$. The transcriptional effect of an activator at position $i$ is denoted $\alpha_{f_i}$. 
+
+Algorithm: since an activator can contribute only when neither side is bound by a close repressor, in the DP, we will not multiply the contribution of an activator site until its both sides have been seen (delayed activation). The main logic is: for a state $\sigma$ ended at $i$, determine if the preceding occupied site $j$ should be productive or not (if $f_j$ is an activator). We have the following cases: for each case, we will need to enumerate all sub-cases of the site $j$, depending on $f_j$ (and if it is repressed if $f_j \in A$) and the distance $d(i,j)$: 
+\begin{itemize}
+\item $Z_1(i), f_i \in A$: if $f_j \in A$ and not repressed, then $f_j$ can contribute. Also, the preceding site cannot be a repressor close enough. 
+\begin{equation}
+Z_1(i) = q(i) \left[ \sum_{j \in \Phi (i):f_j \in A} \omega(i,j) \left(Z_1(j) \alpha_{f_j}  + Z_0(j)\right) + \sum_{\substack{j \in \Phi (i):f_j \in R\\ d(i,j) > d_R}} Z_1(j) + 1\right]
+\end{equation}
+
+\item $Z_1(i), f_i \in R$: if $f_j \in A$ and not repressed, and they are far, then $f_j$ can contribute. 
+\begin{equation}
+\begin{array}{lll}
+Z_1(i) & = & q(i) \left[ \sum_{\substack{j \in \Phi (i):f_j \in A\\ d(i,j) > d_R}} (Z_1(j) \alpha_{f_j} + Z_0(j)) + \sum_{\substack{j\in \Phi (i) :f_j \in A\\ d(i,j) \leq d_R}} (Z_1(j) + Z_0(j)) \right]\\
+ & + & q(i) \left[ \sum_{j \in \Phi (i):f_j \in R} Z_1(j) \omega(i,j) + 1 \right]\\
+\end{array}
+\end{equation}
+
+\item $Z_0(i), f_i \in A$: the site $i$ is repressed only when $j$ is a repressor and close. 
+\begin{equation}
+Z_0(i) = q(i)  \sum_{\substack{j \in \Phi (i):f_j \in R\\d(i,j) \leq d_R}} Z_1(j) 
+\end{equation}
+
+\item $Z_0(i), f_i \in R$: the variable $Z_0(i)$ is not defined if $f_i \in R$, so we have $Z_0(i) = 0$. 
+
+\end{itemize}
+Note that after computing the last site, we will need to multiply the effect of the last activator if it is not repressed. 
+\begin{equation}
+Z_{ON} = 1 + \sum_{i:f_i \in A} \left[ Z_1(i) \alpha_{f_i} + Z_0(i) \right] + \sum_{i:f_i \in R} Z_1(i)
+\end{equation}
+There is no need of extra initial conditions: if a site $i$ does not have any preceding occupied $j$, then it will have the value 1 added. 
+
+\item{Computing $Z_{ON}$ under the activation model} 
+
+Idea: because the total number of effective activator molecules is limited, we need to remember the current number of effective activator molecules during DP. 
+
+Notation: we define $\sigma[i,k]$ be an enhancer configutation where the last site $i$ is occupied, and the total number of effective activator molecules is $k$. We define the recurrence variables: 
+\begin{equation}
+Z(i,k) = \sum_{\sigma[i,k]} W(\sigma) Q(\sigma)
+\end{equation}
+
+Algorithm: the last site (if it is an activator) can either contribute or not. We have the following recurrences:
+\begin{equation}
+Z(i,0) = q(i) \left[ \sum_{j \in \Phi (i)} \omega(i,j) Z(j,0) + 1 \right]
+\end{equation}
+\begin{equation}
+Z(i,k) = q(i) \left[ \sum_{j \in \Phi (i)} \omega(i,j) [Z(j,k-1) \alpha_{f_i} + Z(j,k) ]+ I(k,1)\alpha_{f_i} \right] \qquad 1 \leq k \leq N_0
+\end{equation}
+Note that $Z(i,k) = 0$ if $k > A(i)$ where $A(i)$ is the number of activator sites up to position $i$. The final result is given by: $Z_{ON} = 1 + \sum_{i=1}^{n} \sum_{k=0}^{N_0}Z(i,k)$. 
+
+\item{Computing $Z_{ON}$ under the complete model} 
+
+Notation: we define $\sigma_1[i,k]$ be an enhancer configutation where the last site $i$ is occupied, but not repressed (if it is an activator) and the total number of effective activator molecules is $k$; and $\sigma_0[i,k]$ is similarly defined except that the last site $i$ is repressed. Note that if $i$ is a repressor, then only $\sigma_1[i,k]$ is defined, i.e. $Q(\sigma)$ for $\sigma_0[i,k]$ should be 0. We define the recurrence variables: 
+\begin{equation}
+Z_1(i,k) = \sum_{\sigma_1[i,k]} W(\sigma) Q(\sigma)
+\end{equation}
+\begin{equation}
+Z_0(i,k) = \sum_{\sigma_0[i,k]} W(\sigma) Q(\sigma)
+\end{equation}
+
+Algorithm: the recurrence equations are similar to those under the repression model alone except that: even if an activator molecule is available, it may or may not contribute. Also, we have the similar constraint that $j$ must not overlap with $i$. 
+\begin{itemize}
+\item $Z_1(i,k), f_i \in A$: if $f_j \in A$ and not repressed, then $f_j$ can contribute. Also, the preceding site cannot be a repressor close enough. 
+\begin{equation}
+Z_1(i,0) = q(i) \left[ \sum_{j \in \Phi (i):f_j \in A} \omega(i,j) \left(Z_1(j,0) + Z_0(j,0)\right) + \sum_{\substack{j \in \Phi (i):f_j \in R\\ d(i,j) > d_R}} Z_1(j,0) + 1\right]
+\end{equation}
+If $1 \leq k \leq N_0$: 
+\begin{equation}
+Z_1(i,k)  =  q(i) \left[ \sum_{\substack{j \in \Phi (i)\\f_j \in A}} \omega(i,j) \left(Z_1(j,k-1) \alpha_{f_j}  + Z_1(j,k) + Z_0(j,k)\right) + \sum_{\substack{j \in \Phi (i):f_j \in R\\ d(i,j) > d_R}} Z_1(j,k)\right] 
+\end{equation}
+
+\item $Z_1(i,k), f_i \in R$: if $f_j \in A$ and not repressed, and they are far, then $f_j$ can contribute. 
+\begin{equation}
+Z_1(i,0) = q(i) \left[ \sum_{\substack{j \in \Phi (i):f_j \in A}} (Z_1(j,0) + Z_0(j,0))+ \sum_{j \in \Phi (i):f_j \in R} Z_1(j,0) \omega(i,j) + 1 \right]
+\end{equation}
+If $1 \leq k \leq N_0$: 
+\begin{equation}
+\begin{array}{lll}
+Z_1(i,k) & = & q(i) \left[ \sum_{\substack{j \in \Phi (i):f_j \in A\\ d(i,j) > d_R}} (Z_1(j,k-1) \alpha_{f_j} + Z_1(j,k) + Z_0(j,k)) \right]\\
+ & + & q(i) \left[ \sum_{\substack{j \in \Phi (i):f_j \in A\\ d(i,j) \leq d_R}} (Z_1(j,k) + Z_0(j,k)) + \sum_{j \in \Phi (i):f_j \in R} Z_1(j,k) \omega(i,j) \right]\\
+\end{array}
+\end{equation}
+
+
+\item $Z_0(i,k), f_i \in A$: the site $i$ is repressed only when $j$ is a repressor and close. For any $k$, $0 \leq k \leq N_0$: 
+\begin{equation}
+Z_0(i,k) = q(i) \sum_{\substack{j \in \Phi (i):f_j \in R\\d(i,j) \leq d_R}} Z_1(j,k)
+\end{equation}
+
+\item $Z_0(i,k), f_i \in R$: the variable $Z_0(i,k)$ is not defined if $f_i \in R$, so we have $Z_0(i,k) = 0$. 
+
+\end{itemize}
+Note that $Z_1(i,k) = 0$ and $Z_0(i,k) = 0$ if $k > A(i)$ where $A(i)$ is the number of activator sites up to position $i$. The final result is given by: 
+%\begin{equation}
+%Z_{ON} = 1 + \sum_{i:f_i \in A} \sum_{k=0}^{N_0-1}Z_1(i,k) \alpha_{f_i} + \sum_{i:f_i \in A} Z_1(i,N_0) + \sum_{i:f_i \in A} \sum_{k=0}^{N_0} Z_0(i,k)  + \sum_{i:f_i \in R} \sum_{k=0}^{N_0}Z_1(i,k)
+%\end{equation}
+\begin{equation}
+Z_{ON} = 1 + \sum_{i:f_i \in A} \left[ \sum_{k=0}^{N_0-1}Z_1(i,k) (1+\alpha_{f_i}) + Z_1(i,N_0) + \sum_{k=0}^{N_0} Z_0(i,k) \right] + \sum_{i:f_i \in R} \sum_{k=0}^{N_0}Z_1(i,k)
+\end{equation}
+
+Example: suppose we have an enhancer of 3 sites: $R$, $A_1$ and $A_2$ where the distance between $R$ and $A_1$ is less than $d_0$, but that between $R$ and $A_2$ is larger. The maximum number of allowed activators is $N_0 = 1$. We have:
+\begin{equation}
+\begin{array}{lll}
+Z_{ON} & = & 1 + q_R + q_{A_1} (1+\alpha_1) + q_{A_2} (1+\alpha_2) + q_R q_{A_1} + q_R q_{A_2} (1+\alpha_2)\\ 
+ & + & \omega q_{A_1} q_{A_2} (1 + \alpha_1 + \alpha_2) +  \omega q_R q_{A_1} q_{A_2} (1 + \alpha_2)
+\end{array}
+\end{equation}
+We will give the recurrence results: (suppose the site index starts from 1): 
+\begin{equation}
+Z_1(1,0) = q_R \qquad Z_1(1,1) = 0 \qquad Z_0(1,0) = 0 \qquad Z_0(1,1) = 0
+\end{equation}
+\begin{equation}
+Z_1(2,0) = q_{A_1} \qquad Z_1(2,1) = 0 \qquad Z_0(2,0) = q_{A_1} q_R \qquad Z_0(2,1) = 0
+\end{equation}
+\begin{equation}
+Z_1(3,0) = q_{A_2} \left[ \omega (Z_1(2,0) + Z_0(2,0)) + Z_1(1,0) + 1\right] = q_{A_2}(1 + q_R + \omega q_{A_1} + \omega q_{A_1} q_R)
+\end{equation}
+\begin{equation}
+Z_1(3,1) = q_{A_2} \left[ \omega (Z_1(2,0) \alpha_1 + Z_1(2,1) + Z_0(2,1)) + Z_1(1,1) \right] = \omega q_{A_1} q_{A_2} \alpha_1
+\end{equation}
+\begin{equation}
+Z_0(3,0) = 0 \qquad Z_0(3,1) = 0
+\end{equation}
+One can verify that the total $Z_{ON}$ according to the recurrence is exactly what has been obtained by enumeration. 
+
+\item{Faster dynamic programming algorithms}
+
+Idea: in the recurrence, divide $j$ into two ranges: those with either cooperative binding or repression with $i$ (i.e. some form of dependency), and those not. For the later, merge them into single variables. 
+
+Notation: for any site $i$, we define $C(i)$ as boundary of cooperative binding, i.e. the nearest site where no cooperative binding with $i$ can happen ($C(i)$ itself will not have cooperative binding); and $R(i)$ as the boundary of repression, i.e. the nearest site where no repression can happen ($d(i,j) > d_R \Leftrightarrow j \leq R(i)$). We define one additional recurrence variable, for $k \geq 1$: 
+\begin{equation}
+Z^t(i,k) = \sum_{j \leq i} \left[ Z_1(j,k) + Z_0(j,k) + [f_j \in A] Z_1(j, k-1) \alpha_{f_j}\right]
+\end{equation}
+%\begin{equation}
+%Z^A(i,k) = \sum_{j \in A, j \leq i} Z_1(j,k) \alpha_{f_j}
+%\end{equation}
+where $j$ is allowed to overlap with $i$ and $[f_j \in A]$ is the indicator variable of whether $f_j$ is an activator. For $k = 0$: 
+\begin{equation}
+Z^t(i,0) = \sum_{j \leq i} \left[ Z_1(j,0) + Z_0(j,0)\right]
+\end{equation}
+Furthermore, we define $B(i) = \min \{C(i),R(i)\}$, so that if $j \leq B(i)$, there will be neither cooperative binding nor repression between $j$ and $i$.
+
+Algorithm: (complete model) we have the following cases:
+\begin{itemize}
+\item $Z_1(i,k), f_i \in A$: if $f_j \in A$ and not repressed, then $f_j$ can contribute. Also, the preceding site cannot be a repressor close enough. 
+\begin{equation}
+Z_1(i,0) = q(i) \left[ \sum_{\substack{j \in \Phi (i):f_j \in A\\j > B(i)}} \omega(i,j) \left(Z_1(j,0) + Z_0(j,0)\right) + \sum_{\substack{j \in \Phi (i):f_j \in R\\B(i) < j \leq R(i)}} Z_1(j,0) + Z^t(B(i),0) + 1\right]
+\end{equation}
+If $1 \leq k \leq N_0$: 
+\begin{equation}
+\begin{array}{lll}
+Z_1(i,k) & = & q(i) \left[ \sum_{\substack{j \in \Phi (i):f_j \in A\\j > B(i)}} \omega(i,j) (Z_1(j,k-1) \alpha_{f_j} + Z_1(j,k) + Z_0(j,k)) \right]\\
+& + & q(i) \left[\sum_{\substack{j \in \Phi (i):f_j \in R\\ B(i) < j \leq R(i)}} Z_1(j,k) + Z^t(B(i),k) \right]\\
+\end{array} 
+\end{equation}
+Note that in the above equations, if $R(i) = B(i)$, the summation involving $B(i) < j \leq R(i)$ will simply be 0. 
+
+\item $Z_1(i,k), f_i \in R$: if $f_j \in A$ and not repressed, and they are far, then $f_j$ can contribute. 
+\begin{equation}
+Z_1(i,0) = q(i) \left[ \sum_{\substack{j \in \Phi (i):f_j \in A\\j > C(i)}} (Z_1(j,0) + Z_0(j,0))+ \sum_{\substack{j \in \Phi (i):f_j \in R\\j > C(i)}} Z_1(j,0) \omega(i,j) + Z^t(B(i),0) + 1 \right]
+\end{equation}
+If $1 \leq k \leq N_0$: 
+\begin{equation}
+\begin{array}{lll}
+Z_1(i,k) & = & q(i) \left[ \sum_{\substack{j \in \Phi (i):f_j \in A\\ B(i) < j \leq R(i)}} (Z_1(j,k-1) \alpha_{f_j} + Z_1(j,k) + Z_0(j,k)) \right]\\
+ & + & q(i) \left[ \sum_{\substack{j \in \Phi (i):f_j \in A\\ j > R(i)}} (Z_1(j,k) + Z_0(j,k)) + \sum_{\substack{j \in \Phi (i):f_j \in R\\j > B(i)}} Z_1(j,k) \omega(i,j) \right]\\
+& + & q(i) \cdot Z^t(B(i),k)\\
+\end{array}
+\end{equation}
+
+\item $Z_0(i,k), f_i \in A$: the site $i$ is repressed only when $j$ is a repressor and close. For any $k$, $0 \leq k \leq N_0$: 
+\begin{equation}
+Z_0(i,k) = q(i) \sum_{\substack{j \in \Phi (i):f_j \in R\\ j > R(i)}} Z_1(j,k)
+\end{equation}
+
+\item $Z_0(i,k), f_i \in R$: the variable $Z_0(i,k)$ is not defined if $f_i \in R$, so we have $Z_0(i,k) = 0$. 
+
+\end{itemize}
+And for $Z^t(i,k)$, if $i \geq 1$ and $k \geq 1$, we have: 
+\begin{equation}
+Z^t(i,k) = Z^t(i-1,k) + Z_1(i,k) + Z_0(i,k) + [f_i \in A] Z_1(i,k-1) \alpha_{f_i}
+\end{equation}
+If $i \geq 1$ but $k = 0$, we have:
+\begin{equation}
+Z^t(i,0) = Z^t(i-1,0) + Z_1(i,0) + Z_0(i,0)
+\end{equation}
+%\begin{equation}
+%Z^A(i,k) = \left\{ \begin{array}{ll}
+%Z^A(i-1,k) + Z_1(i,k) \alpha_{f_i} & \text{if $f_i \in A$}\\
+%Z^A(i-1,k) & \text{if $f_i \in R$}\\
+%\end{array} \right.
+%\end{equation}
+The initial conditions: $Z^t(0,k) = 0, \forall k$. The final result is given by: 
+\begin{equation}
+Z_{ON} = 1 + \sum_{k=0}^{N_0} Z^t(n,k)
+\end{equation}
+\end{enumerate} 
+
+\newpage
+
+\item{The general Quenching model} 
+
+\begin{enumerate}
+
+\item{Dynamic programming under the general model} 
+
+Model: the assumptions are the same before, however, we will allow a TF to have multiple roles. Any TF can make a contribution to the transcription, can repress some other TFs bound in the neighborhood, and can form cooperative binding with other TFs in the neighborhood. We will no longer assume, for example, a repressor can act on any activator. It may happen that one repressor acts on one activator, but not on a different one. Similarly, a repressor may both contribute positive to transcription and suppress other TFs at the same time. 
+
+Notation: we will introduct notations to represent the three types of logic above. The transcriptional effect of a factor, $f$, is denoted as $\alpha_f \geq 1$. The total set of TFs where $\alpha_f > 1$ is called $A$. The repression relations are represented by the matrix $R$, where $R_{ff'} = 1$ indicates $f$ represses the neighboring factor $f'$. In general, $R_{ff'} = 1$ only when $f$ is a repressor and $f'$ is an activator. Note that the matrix is not symmetric. The actual repression of a site $i$ on a site $j$ in a sequence is: $R(i,j) = R_{f(i)f(j)} [d(i,j) \leq d_R]$, thus it is 1 only when $R_{f(i)f(j)} = 1$ and $d(i,j) \leq d_R$. We also define $\bar{R}(i,j)$ as the complement of $R(i,j)$. The relationship of cooperative binding is denoted by the matrix $\omega$, where $\omega_{ff'}$ represents the (maximum) interaction between $f$ and $f'$. The matrix is symmetric. The actual cooperative binding of two sites $i$ and $j$ is: $\omega(i,j) = \omega_{f(i)f(j)} \gamma(d)$, where $\gamma(d)$ is the distance function, e.g. $\gamma(d) = 1$ only when $d \leq d_C$ and 0 otherwise. 
+
+Algorithm: since the logic of cooperative binding, repression and activation has been captured by $\omega$, $R$ and $\alpha$ respectively, we can formulate a simpler and more general algorithm without distinguishing activators and repressors. The recurrence variables are defined as before. For $Z_1(i,k)$, we look at its previous site $j$: 
+%\begin{itemize}
+%\item $f_j$ is not repressed by factors before $j$, and $f_i$ does not repress $f_j$: then $f_j$ can either contribute or not if $f_j \in A$: $(Z_1(j,k-1) \alpha_{f_j} + Z_1(j,k)) \bar{R}(i,j)$; and cannot contribute if $f_j \notin A$: $Z_1(j,k) \bar{R}(i,j) = Z_1(j,k)$, because $\bar{R}(i,j) = 1$ if $f_j \notin A$ (cannot repress some TF that is not an activator). 
+%\item $f_j$ is not repressed by factors before $j$, but $f_i$ represses $f_j$: $Z_1(j,k) R(i,j)$. 
+%\item $f_j$ is repressed by factors before $j$: $Z_0(j,k)$. 
+%\end{itemize}
+\begin{itemize}
+\item Any site $j$ will contribute $Z_1(j,k) + Z_0(j,k)$ regardless of whether it is an activator. 
+\item If $f_j \in A$, then it can contribute $\alpha_{f_j}$ to transcription if site $j$ is not repressed before, and not repressed by $f_i$.
+\end{itemize}
+So we have for $k \geq 1$: 
+\begin{equation}
+Z_1(i,k) = q(i) \sum_{j \in \Phi(i)} \bar{R}(j,i) \omega(i,j) \left[ Z_1(j,k) + Z_0(j,k) + [f_j \in A] \bar{R}(i,j) Z_1(j,k-1) \alpha_{f_j} \right]
+\end{equation}
+%\begin{equation}
+%\begin{array}{lll}
+%Z_1(i,k) & = & q(i) \sum_{j \in \Phi(i)} \bar{R}(j,i) \omega(i,j) \cdot \left[ (Z_1(j,k-1) \alpha_{f_j} + Z_1(j,k)) \bar{R}(i,j) [f_j \in A] \right]\\
+%& + & q(i) \sum_{j \in \Phi(i)} \bar{R}(j,i) \omega(i,j) \cdot \left[ Z_1(j,k) [f_j \notin A] + Z_1(j,k) R(i,j) + Z_0(j,k) \right]
+%\end{array}
+%\end{equation}
+For $k = 0$:
+\begin{equation}
+Z_1(i,0) = q(i) \left\{ \sum_{j \in \Phi(i)} \bar{R}(j,i) \omega(i,j) \left[ Z_1(j,0) + Z_0(j,0) \right] + 1 \right\}
+\end{equation}
+%\begin{equation}
+%\begin{array}{lll}
+%Z_1(i,0) & = & q(i) \sum_{j \in \Phi(i)} \bar{R}(j,i) \omega(i,j) \cdot \left[ Z_1(j,k) \bar{R}(i,j) [f_j \in A] \right]\\
+%& + & q(i) \left\{\sum_{j \in \Phi(i)} \bar{R}(j,i) \omega(i,j) \cdot \left[ Z_1(j,0) [f_j \notin A] + Z_1(j,0) R(i,j) + Z_0(j,0) \right] + 1\right\}
+%\end{array}
+%\end{equation}
+%\begin{equation}
+%Z_1(i,0) = q(i) \left\{ \sum_{j \in \Phi(i)} \bar{R}(j,i) \omega(i,j) \left[ Z_1(j,0) + Z_0(j,0) \right] + 1 \right\}
+%\end{equation}
+We note that, for $Z_0(i,k)$, we only need to replace $\bar{R}(j,i)$ with $R(j,i)$, also remove the $+1$ term when $k = 0$: 
+\begin{equation}
+Z_0(i,k) = q(i) \sum_{j \in \Phi(i)} {R}(j,i) \omega(i,j) \left[ Z_1(j,k) + Z_0(j,k) + [f_j \in A] \bar{R}(i,j) Z_1(j,k-1) \alpha_{f_j} \right]
+\end{equation}
+\begin{equation}
+Z_0(i,0) = q(i) \left\{ \sum_{j \in \Phi(i)} {R}(j,i) \omega(i,j) \left[ Z_1(j,0) + Z_0(j,0) \right] \right\}
+\end{equation}
+Because neither $Z_1(0,k)$ nor $Z_0(0,k)$ are used in the recurrence, we do not need to define the initial conditions. For simplicity of programming, initialize all of them to be zero except that $Z_1(0,0) = 1$. The final result is given by: 
+\begin{equation}
+Z_{ON} = 1 + \sum_{i = 1}^{n} \left[ \sum_{k=0}^{N_0} [Z_1(i,k) + Z_0(i,k)] + \sum_{k=0}^{N_0-1} [f_i \in A] Z_1(i,k) \alpha_{f_i} \right]
+\end{equation}
+
+\item{Faster dynamic programming under the general model}
+
+Notation: same as before, we define one additional recurrence variable, for $k \geq 1$: 
+\begin{equation}
+Z^t(i,k) = \sum_{j \leq i} \left[ Z_1(j,k) + Z_0(j,k) + [f_j \in A] Z_1(j, k-1) \alpha_{f_j}\right]
+\end{equation}
+%\begin{equation}
+%Z^A(i,k) = \sum_{j \in A, j \leq i} Z_1(j,k) \alpha_{f_j}
+%\end{equation}
+where $j$ is allowed to overlap with $i$. For $k = 0$: 
+\begin{equation}
+Z^t(i,0) = \sum_{j \leq i} \left[ Z_1(j,0) + Z_0(j,0)\right]
+\end{equation}
+Furthermore, we define $B(i) = \min \{C(i),R(i)\}$, so that if $j \leq B(i)$, there will be neither cooperative binding nor repression between $j$ and $i$.
+
+Algorithm: for $Z_1$: 
+\begin{equation}
+\begin{array}{lll}
+Z_1(i,k) & = & q(i) \sum_{\substack{j \in \Phi(i)\\j > B(i)}} \bar{R}(j,i) \omega(i,j) \left[ Z_1(j,k) + Z_0(j,k) + [f_j \in A] \bar{R}(i,j) Z_1(j,k-1) \alpha_{f_j} \right] \\
+& + & q(i) \cdot Z^t(B(i),k) 
+\end{array}
+\end{equation}
+\begin{equation}
+Z_1(i,0) = q(i) \left\{ \sum_{\substack{j \in \Phi(i)\\j > B(i)}} \bar{R}(j,i) \omega(i,j) \left[ Z_1(j,0) + Z_0(j,0) \right] + Z^t(B(i),0) + 1 \right\}
+\end{equation}
+For $Z_0$: 
+\begin{equation}
+\begin{array}{lll}
+Z_0(i,k) & = & q(i) \sum_{\substack{j \in \Phi(i)\\j > B(i)}} {R}(j,i) \omega(i,j) \left[ Z_1(j,k) + Z_0(j,k) + [f_j \in A] \bar{R}(i,j) Z_1(j,k-1) \alpha_{f_j} \right] \\
+& + & q(i) \cdot Z^t(B(i),k) 
+\end{array}
+\end{equation}
+\begin{equation}
+Z_0(i,0) = q(i) \left\{ \sum_{\substack{j \in \Phi(i)\\j > B(i)}} {R}(j,i) \omega(i,j) \left[ Z_1(j,0) + Z_0(j,0) \right] + Z^t(B(i),0) \right\}
+\end{equation}
+And for $Z^t(i,k)$, if $i \geq 1$ and $k \geq 1$, we have: 
+\begin{equation}
+Z^t(i,k) = Z^t(i-1,k) + Z_1(i,k) + Z_0(i,k) + [f_i \in A] Z_1(i,k-1) \alpha_{f_i}
+\end{equation}
+If $i \geq 1$ but $k = 0$, we have:
+\begin{equation}
+Z^t(i,0) = Z^t(i-1,0) + Z_1(i,0) + Z_0(i,0)
+\end{equation}
+The initial conditions: $Z^t(0,k) = 0, \forall k$. The final result is given by: 
+\begin{equation}
+Z_{ON} = 1 + \sum_{k=0}^{N_0} Z^t(n,k)
+\end{equation}
+
+\end{enumerate}
+
+\item{A new repression model based on chromatin modification}
+
+\begin{enumerate}
+	
+\item Model description
+
+Motivation: 
+\begin{itemize}
+\item Short-range repressors may work through inhibiting DNA binding of transcriptional activators: (i) repressors are not specific to activation domain of activators; (ii) repression depends on CtBP, which has chromatin deacetylase activity. 
+\item It is easier to achieve non-local repression effect: a repressor simply makes its neighborhood, which may contain multiple activator sites, inaccessible to all activators. This both facilitates computation, and makes biological sense, i.e., more likely to happen than the scenarior where a repressor interacts with multiple activtors simultaneously (quenching). 
+\end{itemize}
+
+Physical framework: similar to before, the system consists of many states, the probability of each state is determined from Gibbs distribution, where the free energy of a state comes from: DNA binding of TFs; TF-TF interactions; TF-BTM interactions; and the change of chromatin state (effect of repressors). 
+
+Model: the basic assumptions are: 
+\begin{itemize}
+\item A bound repressor will create a new state: its neighborhood DNA will be inaccessible (called this the effective state). The equlibrium constant of this reaction of DNA accessibility change is $\beta_R$. Or equivalently, the free energy change of this reaction is $-k_B T \ln \beta_R$. So for any repressor, we will call the two states, R (bound only) and R' (effective). 
+\item Interaction among repressors: cooperative interaction should be allowed (cooperative binding helps recruit repressor to chromatin, then downstream events), however, this occurs in the neighborhood where DNA is assumed to be inaccessible. To resolve this conflict, we assume: within the range of an effective repressor site, only binding of another effective repressor site is allowed. In other words, $(R,R)$ and $(R,R')$ are allowed, but not $(R,R')$. 
+\end{itemize}
+The parameter $\beta_R$ controls the strength of repressor. When it is close to 0, the repressor has no repression effect; when it approaches $+\infty$, the repressor completely shut down all adjacent activator sites. An equivalent way to formulating these assumptions is: a repressor can bind to DNA as usual (no effect on chromatin or BTM); or bind to DNA in its active form so that for any configuration, $\sigma$, if some activator binds in the neighborhood of an active repressor, $W(\sigma) = 0$. 
+
+Remark: 
+\begin{enumerate}
+\item Interpretation in terms of nucleosome association/dissociation: similar to [Kim \& O'Shea, 2009], assume that repressor binding increases nucleosome association in the neighborhood, thus $\beta_R$ is the equlibrium constant of nucleosome association in the presence of bound repressor molecule. The difference with [Kim \& O'Shea, 2009] model is: (i) the nucleosome association when repressor is not present is ignored, i.e. normally, DNA is naked; (ii) the activator binding to nucleosomal site is neglectable. 
+
+\item Negative interaction: negative/unfaorable interaction of a repressor with neighboring activators could achieve similar effect of repression, with addiational benefit of allowing partial repression. However, this will require interactions with all activators in the neighborhood, making it computationally difficult. 
+
+\item Multi-level repression: the repression range is a fixed constant and all positions within the range are repressed to the same degree. This is an undesirable feature of the model. To generalize, for a bound repressor, instead of creating a single state where the entire neighborhood is inaccessible, a repressor can create multiple states with different equlibrium constants, where different neighborhoods are inaccessible at different states. Ex. a bound repressor creates two states: one state masks the range 50bp, and the other masks the range 150bp. However, this creates a problem for computation: e.g. two sites R1 and R2 (with different ranges, and suppose R1 is before R2), and we check the state of A before R1, if R1 is much smaller than R2, then A may be repressed by R2, even though it is not by R1. This will create dependency between A and R2 (non-local), and make computation difficult. 
+
+\item The assumption about the repressor site within the range of another repressor site: if we allow $(R,R')$, then this is similar to the multi-level repression case, the fact that R and R' have different ranges (R has range 0) will create computational difficulty. 
+ 
+\end{enumerate}
+
+\item Algorithm of computing partition functions: simple activation model
+
+First, we compute $Z_{OFF}$. For each repressor site, it could exist in three states: not bound, bound only, bound and effective (making the neighborhood DNA inaccessible). We define $Z_0(i)$ as the partition function of the sequence up to site $i$, where $i$ is bound (but no chromatin repression); and $Z_1(i)$ is defined similarly except that $i$ is bound and causes repression. If $i$ is bound only, $i$ could interact with other bound sites, but should not fall in the range of any effective repressor sites. We have the following recurrence: 
+\begin{equation}
+Z_0(i) = q(i) \left[ \sum_{j \in \Phi(i)}\omega(i,j) Z_0(j) + \sum_{j<i, d(i,j)>d_R} Z_1(j) + 1	\right]
+\end{equation}
+For $Z_1(i)$, we consider two cases: if $f(i) \in A$, then $Z_1(i) = 0$; otherwise, the site $i$ could interact with other effective repressor site, but no other sites should fall in its range. We have: 
+\begin{equation}
+Z_1(i) = q(i) \beta_{f(i)} \left[ \sum_{j \in \Phi(i)}\omega(i,j) Z_1(j) + \sum_{j<i, d(i,j)>d_R} Z_0(j) + 1	\right]
+\end{equation}
+The final condition is given by: $Z_{OFF} = \sum_i \left[ Z_1(i) + Z_0(i) \right] + 1$. 
+
+Next, we compute $Z_{ON}$. This is similar to above except that we need to multiply $\alpha_{f(i)}$ for $Z_0(i)$ for activators: 
+\begin{equation}
+Z_0(i) = q(i) \alpha_{f(i)} \left[ \sum_{j \in \Phi(i)}\omega(i,j) Z_0(j) + \sum_{j<i, d(i,j)>d_R} Z_1(j) + 1	\right]
+\end{equation} 
+The equation for $Z_1(i)$ is the same. 
+
+The recurrence could be simplified by defining $B(i)$ as the site before $i$ where no cooperative binding or repression is possible. For $Z_{OFF}$, also define: 
+\begin{equation}
+Z^t(i) = \sum_{j \leq i} \left[ Z_1(j) + Z_0(i) \right] + 1
+\end{equation}
+We have: 
+\begin{equation}
+Z_0(i) = q(i) \left[ \sum_{\substack{j \in \Phi(i)\\j > B(i)}} \omega(i,j) Z_0(j) + \sum_{\substack{j > B(i)\\d(i,j) > d_R}} Z_1(j) + Z^t(B(i)) \right]	
+\end{equation}
+And $Z_1(i) = 0$ if $f(i) \in A$; otherwise: 
+\begin{equation}
+Z_1(i) = q(i) \beta_{f(i)} \left[ \sum_{\substack{j \in \Phi(i)\\j > B(i)}} \omega(i,j) Z_1(j) + \sum_{\substack{j > B(i)\\d(i,j) > d_R}} Z_0(j) + Z^t(B(i)) \right]	
+\end{equation}
+And for $Z^t(i)$: 
+\begin{equation}
+Z^t(i) = Z_1(i) + Z_0(i) + Z^t(i-1)
+\end{equation}
+The initial condition is given by: $Z^t(0) = 1$, and the final condition: $Z_{OFF} = Z^t(n)$. The recurrence for $Z_{ON}$ is similar except that we need to multiply $\alpha_{f(i)}$ in the equation of $Z_0(i)$. 
+
+\item Algorithm of computing partition functions: limited activation model
+
+The computation of $Z_{OFF}$ is exactly the same. Suppose the number of bound, contributing activator sites can be no more than $N_0$. We define $Z_0(i,k)$ be the sum of weights over all configurations where the bound factor at position $i$ is not an effective repressor and the number of contributing activators equals to $k$; and $Z_1(i,k)$ be the sum over all configurations where the bound factor at $i$ is an effective repressor and the number of contributing activators equals to $k$. When $k = 0$, we have the following recurrences: 
+\begin{equation}
+Z_0(i,0) = q(i) \left[ \sum_{j \in \Phi(i)}\omega(i,j) Z_0(j,0) + \sum_{j<i, d(i,j)>d_R} Z_1(j,0) + 1	\right]
+\end{equation}
+For $Z_1(i,0)$: if $f(i) \in A$, then $Z_1(i,0) = 0$; otherwise: 
+\begin{equation}
+Z_1(i,0) = q(i) \beta_{f(i)} \left[ \sum_{j \in \Phi(i)}\omega(i,j) Z_1(j,0) + \sum_{j<i, d(i,j)>d_R} Z_0(j,0) + 1	\right]
+\end{equation}
+
+When $k \geq 1$, we have two cases for $Z_0(i,k)$. If $f(i) \in A$, then $f(i)$ may or may not contribute: 
+\begin{equation}
+\begin{array}{lll}
+Z_0(i,k) & = & q(i) \left[ \sum_{j \in \Phi(i)}\omega(i,j) Z_0(j,k) + \sum_{j<i, d(i,j)>d_R} Z_1(j,k)	\right]\\
+ & + & q(i) \alpha_{f(i)} \left[ \sum_{j \in \Phi(i)}\omega(i,j) Z_0(j,k-1) + \sum_{j<i, d(i,j)>d_R} Z_1(j,k-1)	+ [k=1] \right]
+\end{array}
+\end{equation}
+If $f(i) \in R$, we have: 
+\begin{equation}
+Z_0(i,k) = q(i) \left[ \sum_{j \in \Phi(i)}\omega(i,j) Z_0(j,k) + \sum_{j<i, d(i,j)>d_R} Z_1(j,k)	\right]
+\end{equation}
+For $Z_1(i,k)$, it is 0 if $f(i) \in A$; otherwise: 
+\begin{equation}
+Z_1(i,k) = q(i) \beta_{f(i)} \left[ \sum_{j \in \Phi(i)}\omega(i,j) Z_1(j,k) + \sum_{j<i, d(i,j)>d_R} Z_0(j,k) \right]
+\end{equation}
+
+We could simplify the recurrences. Define: 
+\begin{equation}
+Z^t(i,k) = \sum_{j \leq i} \left[ Z_0(j,k) + Z_1(j,k) \right]	
+\end{equation}
+Initial conditions: $Z^t(0,0) = 1$ and $Z^t(0,k) = 0 \forall k \geq 1$. The boundary of any site $i$ is denoted as $B(i)$. We have: 
+\begin{equation}
+Z_0(i,0) = q(i) \left[ \sum_{j > B(i)}\omega(i,j) Z_0(j,0) + \sum_{\substack{j > B(i)\\d(i,j) > d_R}} Z_1(j,0) + Z^t(B(i),0)	\right]
+\end{equation}
+For $Z_1(i,0)$: if $f(i) \in A$, then $Z_1(i,0) = 0$; otherwise: 
+\begin{equation}
+Z_1(i,0) = q(i) \beta_{f(i)} \left[ \sum_{j > B(i)}\omega(i,j) Z_1(j,0) + \sum_{\substack{j > B(i)\\d(i,j) > d_R}} Z_0(j,0) + Z^t(B(i),0)	\right]
+\end{equation}
+When $k \geq 1$, we have two cases for $Z_0(i,k)$. If $f(i) \in A$, then $f(i)$ may or may not contribute: 
+\begin{equation}
+\begin{array}{lll}
+Z_0(i,k) & = & q(i) \left[ \sum_{j > B(i)}\omega(i,j) Z_0(j,k) + \sum_{\substack{j > B(i)\\d(i,j) > d_R}} Z_1(j,k) + Z^t(B(i),k)	\right]\\
+ & + & q(i) \alpha_{f(i)} \left[ \sum_{j > B(i)}\omega(i,j) Z_0(j,k-1) + \sum_{\substack{j > B(i)\\d(i,j) > d_R}} Z_1(j,k-1)	+ Z^t(B(i),k-1) \right]
+\end{array}
+\end{equation}
+If $f(i) \in R$, we have: 
+\begin{equation}
+Z_0(i,k) = q(i) \left[ \sum_{j > B(i)}\omega(i,j) Z_0(j,k) + \sum_{\substack{j > B(i)\\d(i,j) > d_R}} Z_1(j,k) + Z^t(B(i),k)	\right]
+\end{equation}
+For $Z_1(i,k)$, it is 0 if $f(i) \in A$; otherwise: 
+\begin{equation}
+Z_1(i,k) = q(i) \beta_{f(i)} \left[ \sum_{j > B(i)}\omega(i,j) Z_1(j,k) + \sum_{\substack{j > B(i)\\d(i,j) > d_R}} Z_0(j,k) + Z^t(B(i),k) \right]
+\end{equation}
+Finally, we have: $Z_{ON} = \sum_{k=0}^{N_0} Z^t(n,k)$. 
+
+\item Model with effective repressors only 
+
+Note that a repressor may exist in two states: (i) bound to its site and block its neighboring chromatin (effective); (ii) bound only. If $\beta_R$ is large enough, we could ignore the conversion between states (i) and (ii) and assume that all repressor molecules will immediately make its neighboring chromatin unaccessible (i.e. only effective repressor). In this interpretation, the binding strength of the repressor $q_R$ actually encodes both DNA binding and the effect of recruiting corepressors to block DNA access. Thus we have: 
+\begin{itemize}
+\item Any bound repressor will make its neighboring DNA inaccessible to activator molecules. 
+\item Cooperative binding between repressors: allowed, interpreted as the two repressors first interact cooperatively, then recruit co-repressor molecules to stop the neighborhood. The weight calculation simply follows the usual way of treating cooperativity, except that the joint neighborhood is now inaccessible. 
+\end{itemize}
+
+Remark: one might be tempted to think that the two parameters: $\lambda_R$ for binding, and $\beta_R$ for chromatin modification, are inseparable since only the effective repressor is ``visible''. However, this is not true. In fact, we could learn both parameters simultaneously: the binding parameter is related to the variability of different repressor sites, and the $\beta_R$ parameter is related to the overall/average level of repression. So this model is only applicable when $\beta_R$ is very large. 
+
+Model: suppose we want to compute $Z_{OFF} = \sum_{\sigma} W(\sigma)$, we have: 
+\begin{equation}
+Z(i) = q(i) \left[ \sum_{j \in \Phi(i)}\omega(i,j) \delta(i,j)Z(j) + 1	\right]
+\end{equation}
+where $\delta(i,j) = 0$ if $i$ and $j$ are A and R, respectively (order doesn't matter), and $d(i,j) \leq d_0$ (the range of repression). The idea for this recurrence is: if $i$ is R (or A), and the previous site of $i$ is an A site (or R site), then all configurations ended at $j$ will not contribute to $Z(i)$. To compute $Z_{ON} = \sum_{\sigma} W(\sigma) Q(\sigma)$, we have: 
+\begin{equation}
+Z(i) = q(i) \alpha_{f(i)} \left[ \sum_{j \in \Phi(i)}\omega(i,j) \delta(i,j)Z(j) + 1	\right]
+\end{equation}
+Note that in this equation, $\alpha_{f(i)} = 1$ if $f(i)$ is a repressor. 
+
+We could simplify the recurrence by defining $B(i)$ as the site before $i$ where no cooperative binding or repression is possible. For $Z_{OFF}$, also define: 
+\begin{equation}
+Z^t(i) = \sum_{j \leq i} Z(j) + 1
+\end{equation}
+We have: 
+\begin{equation}
+Z(i) = q(i) \left[ \sum_{\substack{j \in \Phi(i)\\j > B(i)}} \omega(i,j) \delta(i,j) Z(j) + Z^t(B(i)) \right]	
+\end{equation}
+\begin{equation}
+Z^t(i) = Z(i) + Z^t(i-1)
+\end{equation}
+The initial condition: $Z^t(0) = 1$; the final condition: $Z_{OFF} = Z^t(n)$. For $Z_{ON}$, define $Z^t(i)$ similarly, and we have the recurrence: 
+\begin{equation}
+Z(i) = q(i) \alpha_{f(i)} \left[ \sum_{\substack{j \in \Phi(i)\\j > B(i)}} \omega(i,j) \delta(i,j) Z(j) + Z^t(B(i)) \right]	
+\end{equation}
+\begin{equation}
+Z^t(i) = Z(i) + Z^t(i-1)
+\end{equation}
+The initial condition: $Z^t(0) = 1$; the final condition: $Z_{ON} = Z^t(n)$. 
+
+\item{Test cases for the model}
+
+The ranges of parameters: ([Buchler \& Hwa, 2003])
+\begin{itemize}
+\item Maximum binding weight ($\lambda$): 0.1 - 10.
+\item Binding site strength ($f = e^{-\Delta E/k_B T}$): $0.01$ (weak) to $1$ (strongest).  
+\item Cooperative binding ($\omega$): 10 - 100. 
+\item Activation ($\alpha$): 10 - 100. 
+\item Basal expression ($q_P$): 0.01 - 0.1. 
+\end{itemize}
+
+Test cases: note that for limited activation model, if $N_0 = 1$, $\alpha$ should be replaced as $1 + \alpha$ and $\alpha_1 \alpha_2$ should be $1 + \alpha_1 + \alpha_2$. 
+
+\begin{itemize}
+\item{Simple activation}
+
+Sequence: single A site; Factor expression: [A] - anterior; Target expression: anterior. 
+\begin{equation}
+Z_{OFF} = 1 + q_A
+\end{equation}
+\begin{equation}
+Z_{ON} = 1 + \alpha q_A
+\end{equation}
+
+\item{Activation via cooperative binding}
+
+Sequence: linked $A_1$ and $A_2$ sites; Factor expression: [A1] - anterior, [A2] - posterior; Target expression: central (overlapped region). 
+\begin{equation}
+Z_{OFF} = 1 + q_{A_1} + q_{A_2} + \omega q_{A_1} q_{A_2}
+\end{equation}
+\begin{equation}
+Z_{ON} = 1 + \alpha_1 q_{A_1} + \alpha_2 q_{A_2} + \alpha_1 \alpha_2 \omega q_{A_1} q_{A_2}
+\end{equation}
+
+\item{Repression}
+
+Sequence: A and R sites; Factor expression: [A] - anterior, [R] - anterior; Target expression: stripe, with the anterior boundary set by R and the posterior by the low [A]. 
+\begin{equation}
+Z_{OFF} = 1 + ( 1+ \beta_R) q_R + q_A + q_A q_R
+\end{equation}
+\begin{equation}
+Z_{ON} = 1 + (1 + \beta_R) q_R + \alpha_A q_A + \alpha_A q_A q_R
+\end{equation}
+
+\item{Repression by two repressors}
+
+Sequence: A, $R_1$ and $R_2$ sites; Factor expression: [A] - anterior, [R1] - anterior, [R2] - central; Target expression: stripe, with the anterior boundary set by $R_1$ and the posterior by $R_2$.  
+\begin{equation}
+Z_{OFF} = 1 + (1 + \beta_1) q_{R_1} + (1 + \beta_2) q_{R_2} + (1 + \beta_1 \beta_2) \omega q_{R_1} q_{R_2} + (1 + q_{R_1} + q_{R_2} + \omega q_{R_1} q_{R_2}) q_A
+\end{equation}
+\begin{equation}
+Z_{ON} = 1 + (1 + \beta_1) q_{R_1} + (1 + \beta_2) q_{R_2} + (1 + \beta_1 \beta_2) \omega q_{R_1} q_{R_2} + (1 + q_{R_1} + q_{R_2} + \omega q_{R_1} q_{R_2}) \alpha_A q_A
+\end{equation}
+
+\end{itemize}
+
+\end{enumerate}
+
+\item{Inference}
+
+\begin{enumerate}
+
+\item{Summary of models}
+
+\begin{itemize}
+
+\item Logistic model: logistic regression of expression to the binding site features. Each feature corresponds to the expected occupancy of one TF (no TF cooperativity). 
+
+\item Direct model: each TFBS contributes to expression, either positive (for activators) or negative (for repressors). And the effects are multiplicative. 
+
+\item Short-range repression (SSR) model: a bound repressor can make neighborhing chromosome region inaccessible. Activation is limited by the maximum number of bound activator molecules. 
+
+\end{itemize}
+
+\item{Data and paramaters}
+
+Data: 
+\begin{itemize}
+\item Sequences: $S_i, 1 \leq i \leq n$. 
+\item Expression: $E(i,j), 1 \leq i \leq n, 1 \leq j \leq m$ - the expression of $S_i$ under the $j$-th condition (different AP positions at possibly different stages). 
+\item TF PWMs: $\theta_k, 1 \leq k \leq K$. 
+\item TF expression in $m$ conditions: $F(k,j), 1 \leq k \leq K, 1 \leq j \leq m$ - the expression of the $k$-th TF under the $j$-th condition. 
+\end{itemize}
+
+Free parameters: to be trained from the data
+\begin{itemize}
+\item Binding: $\lambda = \nu K(S_{\max})$ where $\nu$ is the maximum [TF] and $K(S_{\max})$ is the equilibrium constant of the strongest site. For $k$-th factor: $\lambda_k, 1 \leq k \leq K$. Used by all models. 
+\item Cooperativity: $\omega_{kk'}$ is the maximum interaction betweent two factors $k$ and $k'$. Note that only pairs whose coopeartivity matrix entries (see below) are 1 will have this parameter, otherwise, it is constant 1. Used by Direct and Quenching models. 
+\item Transcriptional effect: $\alpha_k, 1 \leq k \leq K$ for the $k$-th factor. For Logistic and Direct model, it can be both positive effect (for activators) and negative effect (for repressors). For Quenching model, it is only defined for the TFs in the set of activators $A$ (see below), i.e. $\alpha_k = 1$ if $k$-TF is not in $A$. 
+\item Repression effect: $\beta_k, 1 \leq k \leq K$ for the $k$-th factor. It is equal to 0 if $k$ is not a repressor. 
+\item Basal transcription: $\alpha_0$ for Logistic model, and $q_p$ for Direct and SSR model. 
+\item Scaling constant: $c$, the ratio of the actual measurement and the predicted expression (promoter occupancy). Used by all models. 
+\end{itemize}
+
+Control parameters: specified, control the behavior of the model
+\begin{itemize}
+\item Cooperativity matrix: $C_{ff'} = 1$ if the factors $f$ and $f'$ have cooperative binding; 0 otherwise. The matrix is symmetric. Used by Direct and Quenching models. 
+\item Cooperative binding distance threshold: $d_C$. Used by Direct and Quenching models. 
+\item Activator set: $A$. Used by SSR model. For the other two models, the transcriptional effect of a TF indicate whether it is an activator or repressor. 
+\item Repressor site: $R$. Used by SSR model. 
+\item Maximum contact: $N_0$. Used by the SSR model. 
+\item Repression distance threshold: $d_R$. Used by the SSR model. 
+%\item Repression matrix: $R_{ff'} = 1$ if the factor $f$ can repress the factor $f'$; 0 otherwise. The matrix is not symmetric. Used by Quenching model. 
+\end{itemize}
+
+\item{Parameter estimation}
+
+Objective function: let $\Theta$ be the set of all free parameters, and $P(i,j)$ be the predicted expression (promoter occupancy) of $S_i$ in the $j$-th condition, minimize the following objective function: 
+\begin{equation}
+\Psi(\Theta) = \sum_{i,j} [c \cdot P(i,j|\Theta) - E(i,j)]^2
+\end{equation}
+
+\item{Model comparison}
+
+With different control parameters, we will have different models. Thus we can compare models to answer biological questions: 
+\begin{itemize}
+\item Synergy of transcription: cooperative binding vs multiple contact. Could test this by: (i) cooperative binding: set $N_0 = 1$ and allow $C_{ff'} = 1$ for putative interacting pairs; (i) multiple contact: set $N_0$ be large, and fix $C_{ff'} = 0$ for putative interacting pairs. 
+\item Role of TFs: for a new TF, characterize its role by (i) testing if it is an activator by adding it to $A$; (ii) if not an activator, testing if it is a repressor by adding it to the $R$ matrix; (iii) testing if it forms coopeartive binding with other TFs. 
+\item Advanced features: dual role (both activator and repressor), context-specific repression (repress some activators, but not the other ones), etc. 
+\item Mode of cooperative binding: the effect of $d_C$, how spacing and orientation affect the cooperative binding. 
+\end{itemize}
+
+\end{enumerate}
+
+\newpage
+
+\item{Analysis of TF-DNA binding data}
+
+Problem: given a sequence $S$ of $n$ putative TFBSs, for any motif $k$, compute the expected number of bound molecules of $k$, $\overline{N_k}$. Let $N_k(\sigma)$ be the number of bound molecules in the configuation $\sigma$, and $W(\sigma)$ be the statistical weight of configuation of $\sigma$ as usual, then: 
+\begin{equation}
+\overline{N_k} = \sum_{\sigma}N_k(\sigma) p(\sigma) = \frac{\sum_{\sigma}W(\sigma)N_k(\sigma)}{\sum_{\sigma}W(\sigma)}
+\end{equation}
+where $p(\sigma)$ is the probability of the configuation $\sigma$. The denominator $Z$ is computed as shown before. Need to compute the numerator $Y_k = \sum_{\sigma}W(\sigma)N_k(\sigma)$. The binding intensity of the factor $k$ to the sequence $S$ can be assumed to be proportional to the expected number of $k$ molecules bound to $S$. 
+
+Model: 
+\begin{enumerate}
+
+\item Algorithm
+
+We wish to compute $Y_k(i) = \sum_{\sigma[i]}W(\sigma[i])N_k(\sigma[i])$. For any specific configuation $\sigma[i]$, we have: 
+\begin{equation}
+W(\sigma[i]) N_k(\sigma[i]) = \left[ W(\sigma[j]) q(i) \omega(i, j) \right] \left[ N_k(\sigma[j]) + I(f_i, k) \right]
+\end{equation}
+where $I(f_i, k)$ is the indicator variable of whether $f_i$ is equal to $k$. Simplify it: 
+\begin{equation}
+W(\sigma[i]) N_k(\sigma[i]) = q(i) \omega(i, j) \left[ W(\sigma[j]) N_k(\sigma[j]) + W(\sigma[j]) I(f_i, k) \right]
+\end{equation}
+Summing over all $\sigma[i]$: 
+\begin{equation}
+Y_k(i) = q(i) \left\{ \sum_{j \in \Phi (i)} \omega(i, j) \left[ Y_k(j) + I(f_i, k) Z(j) \right]  + I(f_i, k) \right\}
+\end{equation}
+The last bound site could be $1,2,\cdots,n$ (if no site is bound, contribute 0), so we have: $Y_k = \sum_{i=1}^{n}Y_k(i)$. No need of initial condition: $Y_k(i)$ will be its correct value $q(i) I(f_i, k)$ if $\Phi (i) = \emptyset$. 
+
+Similar to before, we could obtain a faster dynamic programming, by considering a distance cutoff. Let $Y_k^t(i)$ be defined as the sum of $W(\sigma)Q(\sigma)$ over all $\sigma$ up to site $i$ (the site $i$ can be occupied or not), that is: 
+\begin{equation}
+Y_k^t(i) = \sum_{j \leq i} Y_k(i)
+\end{equation}
+Then we have the new recurrence: 
+\begin{equation}
+Y_k(i) = q(i) \left\{ \sum_{j \in \Phi (i): j > C(i)} \omega(i, j) \left[ Y_k(j) + I(f_i, k) Z(j) \right] + Y_k^t(C(i)) + I(f_i, k) Z^t(C(i)) \right\}
+\end{equation}
+\begin{equation}
+Y_k^t(i) = Y_k(i) + Y_k^t(i-1)
+\end{equation}
+where the last equation comes from the fact that: if $i$ is not occupied, then it is as if it did not exist. The initial condition is given by: $Y_k^t(0) = 0$. And the final result is $Y_k = Y_k^t(n)$ where $n$ is the last site. 
+
+%If allowing a site to match multiple TFs, we could derive the similar recurrence for $Y_t(i,k)$, the sum of $W(\sigma)N_t(\sigma)$ over all $\sigma[i,k]$: 
+%\begin{equation}
+%Y_t(i,k) = q_{k}(i) \left[ \sum_{j \in \Phi (i)}\sum_{k' \neq 0}{\omega(k, k', d(i,j)) \left\{ Y_t(j,k') + [k = t] Z(j,k') \right\}}  + [k = t] \right]
+%\end{equation}
+%Similarly, if $k=0$, we could also use this recurrence: 
+%\begin{equation}
+%Y_t(i,0) = Y_t(i-1,0) + \sum_{k \neq 0}{Y_t(i-1,k)}
+%\end{equation}
+%$Y_t$ is given by: $Y_t = Y_t(n,0) + \sum_{k \neq 0}Y_t(n,k)$. 
+
+\item Error treatment
+
+In ChIPSeq data, the measurement is count (the count of each position is the number of DNA fragments containing this position). Assume that the number of random DNA fragments containing a position is Poisson distribution, and each fragment has a probability to be selected in ChIP (which depends on the binding intensity), then the count should follow a Poisson distribution whose mean depends on the binding intensity of the sequence. Suppose $X_i$ is the $i$-th sequence, $\theta$ is the parameter set, and $Y_i$ is the measurement whose distribution is Poisson with mean $N_{\theta}(X_i)$. Then the log-likelihood is given by: 
+\begin{equation}
+l(\theta) = \log P(y|x,\theta) = \sum_i \log P(y_i |x_i,\theta) = \sum_i\left[ {y_i \log N_{\theta}(x_i) - N_{\theta}(x_i)}\right] - \sum_i{\log{y_i !}}
+\end{equation}
+Thus maximizing $\theta$ is equivalent to minimizing the negative of the first term, which can be viewed as the weighted sum of errors. Intuitively, the weighting is necessary because larger data points tend also to have larger errors. 
+
+\end{enumerate}
+
+Parameter sensitivity analysis: 
+
+\begin{enumerate}
+
+\item Consider the sequence of two sites $A$ and $B$, want to study the binding of $A$. Let $\omega$ be the interaction between the two, the number of $A$ molecules bound is: 
+\begin{equation}
+N = \frac{q_A (1 + \omega q_B)}{1 + q_A + q_B + \omega q_A q_B}
+\end{equation}
+We have the following intuition: 
+
+\textbf{Intuition}: if $B$ helps the binding of $A$, could be either strong DNA binding of $B$, but low $\omega$; or weak DNA binding of $B$, but high $\omega$. 
+Therefore, it is difficult to disentangle $q_B$ and $\omega$. Furthermore, DNA binding has saturation, up to certain point, no longer sensitive to $q$. We have the following special cases: 
+\begin{itemize}
+\item If $q_A >> q_B$, then $N \approx q_A / (1 + q_A)$, insensitive to $q_B$ and $\omega$. 
+\item If $q_A << q_B$, then $N \approx \omega q_A / (1 + \omega q_A)$, insensitive to $\omega q_A$ (as long as the condition $q_A << q_B$ is satisfied). 
+\item If $\omega \approx 1$, then $N \approx q_A / (1 + q_A)$, insensitive to $q_B$. 
+\end{itemize}
+
+\item Applications of the above cases: because of the insensitivity in certain ranges of parameters, a parameter estimation procedure may have difficulty finding the correct values, or may simply give unreasonable values. 
+\begin{itemize}
+\item If there is no actual interaction: could simply have $q_B << q_A$, and arbitrary value of $\omega$. 
+\item If $B$ helps $A$, could have $q_A << q_B$, and let $\omega$ to explain the binding of $A$ (because $\omega$ and $q_A$ are not separable); or could have very small $q_B$, but very large $\omega$. 
+\end{itemize}
+Finally, about the cooperativity parameter $\omega_{AA}$, the sequence with smaller number of sites may employ other hidden factors to increase its binding, thus the relationship between intensity and the number of sites is sub-linear, the estimated value of $\omega_{AA}$ will be less than 1. 
+
+\end{enumerate}
+
+Cooperativity function: the physical interaction between two adjacent bound factors with distance $d$, $\omega(d)$. It may also depend on the orientation of the two sites (in the same direction or not). Let $d_{\max}$ be the maximum distance where two could interact. 
+
+\begin{enumerate}
+
+\item Binary function: interaction if two sites are within a distance, no interaction outside. Furthermore, it has an orientation bias (one orientation will be favored with the other) by multiplying a constant to $\omega$ if two sites are at different strands. 
+\begin{equation}
+\omega(d) = \left\{ \begin{array}{ll}
+\omega & d \leq d_{\max}\\
+1 & d > d_{\max}
+\end{array} \right.
+\end{equation}
+
+\item Linear function: decay of interaction outside a certain distance ($d_0$) until reaching $d_{\max}$. Linear interpolation between $d_0$ and $d_{\max}$. And similar for orientation bias. 
+\begin{equation}
+\omega(d) = \left\{ \begin{array}{ll}
+\omega & d \leq d_0\\
+1 + (d_{\max}-d) \cdot (\omega-1) / (d_{\max}-d_0)  & d_0 < d \leq d_{\max}\\
+1 & d > d_{\max}
+\end{array} \right.
+\end{equation}
+
+\item Periodic function: consider two factors $A$ and $B$ with interaction energy $\Delta G_{A-B}^0$. The energy of DNA looping is: 
+\begin{equation}
+\Delta G_l = \Delta G_l^0 - \Delta G' \sin(2\pi \frac{d}{T} + \phi)	
+\end{equation}
+where $\Delta G'$ represents the energy fluctuation, $T$ is the period and $\phi$ is the phase parameter. Then the effective interaction between $A$ and $B$ is the sum of the two terms, merging the constant term, we have: 
+\begin{equation}
+\Delta G = \Delta G_{A-B} - \Delta G' \sin(2\pi \frac{d}{T} + \phi)
+\end{equation}
+The interaction weight is $\exp(-\Delta G/RT)$, we have for $d \leq d_{\max}$: 
+\begin{equation}
+\omega(d) = \omega \gamma^{\sin(2\pi \frac{d}{T} + \phi)}	
+\end{equation}
+where $\omega$ and $\gamma = \exp(\Delta G'/RT)$ are constants. From [Saiz \& Vilar, PNAS, 2005], $\Delta G' = 0.68$ kcal/mol, and thus $\gamma \approx e$, since $RT \approx 0.6$ kcal/mol. Again, we have $\omega(d) = 1$ if $d > d_{\max}$. Also note that $\phi$ can in fact take two values, depending on whether the two sites are in the same orientation. 
+
+\end{enumerate}
+\newpage
+
+\item{Reconstructing TRN from sequence and expression data} 
+
+Problem: given the putative regulatory sequences, including their orthologous ones, of a set of genes, $S$, their expression across multiple conditions, $E$, the motifs of a set of TFs, $\Theta$, and optionally, ChIP binding data of some relevant TFs, find the regulatory regions of each gene (relevant to the observed expression pattern), and the corresponding TFs for each region. 
+
+Procedure: 
+\begin{enumerate}
+\item Preparation of candidate cis-regulatory sequences (CRS): promoters, evolutionarily conserved regions (ECRs) and ChIP identified regions. Each gene is associated with a set of regions. 
+\item Construction of initial transcriptional regulatory network: for any region, test the association of a TF (motif) with this region. A TF is associated with a region if the sites of this TF are enriched in this region and tend to be conserved. The result of this step is: for each region, an associated set of motifs. 
+\item Prediction of CRMs and expression parameters: find a region for each gene that best predicts the observed expression, and the relevant expression parameters - the TF concentrations (scaling parameter), the strength of each TF
+\item Learning regulatory rules from the predicted CRMs and TRN: 
+\begin{itemize}
+\item Network analysis: which TFs frequently target the same genes; how often genes with the same expression pattern use diffrent regulatory mechanisms; etc. 
+\item Sequence analysis: for any TF pair, find if they have any interactions and follow certain rules. Extract the distribution of a feature (e.g. the distance between the sites of the TF pair, whether the sites are in the same strand) in CRMs and background sequences, and test if the feature has a different distribution in the two sets. 
+\end{itemize}
+\end{enumerate}
+
+Model: 
+\begin{enumerate}
+\item{Expression model} 
+
+Ideas: 
+\begin{itemize}
+\item Learning problem: treat the problem of predicting expression from sequence features as a learning problem. In particular, if expression is either ON or OFF, then it is a classification problem. The sequence features are motif presences in a sequence, the presence of synergistically-interacting motif pairs, etc. 
+\item Feature activity: at different conditions, the sequence features are ``read'' differently because the [TF]s are different. Define ``feature activity'' as the actual relevance of this feature in a certain condition, integrating both trans- and cis- effects. Thus, feature activity is 0 if either the sequence feature is missing or the corresponding TF is not expressed. A reasonable way of defining feature activity for a single motif is: the total binding of this TF to the sequence. 
+\item Feature masking: a special case is where the TF expression is either ON or OFF. Then at each condition, the sequence features correspondong to TFs at OFF state are effectively masked. The learning problem can be proceeded as usual on the active sequence features. 
+\end{itemize}
+
+We want to define the function that maps sequence features (cis-acting) and TF concentrations (trans-acting) to the expression level. Suppose there are $K$ TFs, the concentration of the $k$-th TF is $c_k$, and $\lambda_k$ is the scaling constant for the active TF concentrations (mRNA to protein, etc.). And let $x_k$ be the $k$-th feature of a sequence, i.e. the sequence features wrt. the $k$-th TF, it could be the strongest binding site of $k$-th motif in the sequence, the number of binding sites in the sequence, etc. The actual effect of the sequence feature is modified by the TF expression, so the feature activity is given by the activity function $h_k = h(x_k; \lambda_k, c_k)$. The expression from this sequence is given by some learning function, e.g.
+\begin{equation}
+y = \text{logit}\left( w_0 + \sum_{k}w_{k} h(x_k; \lambda_k, c_k) \right)
+\end{equation}
+where $w_k$ is the expression contribution of the factor $k$. Consider one particular case of activity function: the expected binding of a factor to a sequence. We let $x_k^{(1)}, \cdots, x_k^{(n)}$ be the association constants of all sites of $k$-th TF in this sequence. The occupancy of one site is $\lambda c x / ( 1 + \lambda c x) \approx \lambda c x$, since the occupancy is generally low. So the total occupancy of $k$-th TF is: $h_k = \lambda_k c_k x_k$ where $x_k$ is the sum of association constants of all sites. Plug in this in the above equation, we could merge $w_k \lambda_k$ as $u_k$, and have:
+\begin{equation}
+y = \text{logit}\left( w_0 + \sum_{k}u_{k} c_k x_k\right)
+\end{equation}
+
+\item{Expression regression} 
+
+Data include: sequences, expression of the genes, and expression of TFs. Suppose there are $N$ genes with expression measured across $M$ conditions and there are $K$ factors involved. The expression of $i$-th gene in the $j$-th condition is denoted $y_{ij}$, and the expression of the $k$-th TF in the $j$-th condition is denoted $c_{kj}$. The $k$-th feature of the $i$-th sequence is $x_{ik}$. The unknown parameters are $\lambda_k$, the scaling constant of $k$-th TF, and $w_k$, the expression contribution of the factor $k$. We have: 
+\begin{equation}
+y_{ij} = \text{logit}\left( w_0 + \sum_{k}w_k h(x_{ik}; \lambda_k, c_{kj}) \right)
+\end{equation} 
+If we take the simple activation function described above, we will have:
+\begin{equation}
+y_{ij} = \text{logit}\left( w_0 + \sum_{k}u_k c_{kj} x_{ik} \right)
+\label{eq:expr_regression}
+\end{equation} 
+
+\item{High-level cis-regulatory features}
+
+We use the same ideas to model high-level features. Any new feature will have a certain activity in a given condition, depending on the expression of the relevant TFs, and make contributions to expression. Now $k$ is an index of a sequence feature, not just single motif presence. We consider the feature of synergistic interaction between two TFs, which is $1$ if there exists a pair of adjacent sites of the two factors and $0$ otherwise. We treat this site pair as a composite cis-element. It is activated when both of the sites are occupied, this probability is:
+\begin{equation}
+P = \frac{\omega \lambda_1 c_1 K_1 \lambda_2 c_2 K_2}{1 + \lambda_1 c_1 K_1 + \lambda_2 c_2 K_2 + \lambda_1 c_1 K_1 \lambda_2 c_2 K_2} \approx \omega \lambda_1 c_1 K_1 \lambda_2 c_2 K_2
+\end{equation}
+where $K_1$ and $K_2$ are association constants of the two sites. So we could have have the same equation (\ref{eq:expr_regression}) for added features. The $\omega$ term will be combined with $w_k \lambda_k$ to form $u_k$, $c_{kj}$ term now is the product of concentrations of the two TFs of this feature; and $x_{ik}$ term is the sum of the products of association constants over all site pairs. 
+
+\item{Complete inference}
+
+Let $Z$ be the indices of the sequence regions that predict the expression pattern, and $\Omega$ be the expression parameters: the concentrations of TFs (scaling constant) and the effect of each TF, $w_k$. Note that each sequence region includes the information of which motifs are associated to this region. We need to find $Z$ and $\Omega$ the maximizes (or sample from) $P(Z,\Omega|S,E) \propto P(Z) P(\Omega) P(E|S,Z,\Omega)$, where $P(Z)$ and $P(\Omega)$ are the prior distributions of $Z$ and $\Omega$ respectively. This could be done by either Gibbs sampling or conditional maximization: 
+\begin{itemize}
+\item $Z \rightarrow \Omega$: fitting expression 
+\item $\Omega \rightarrow Z$: sequence scanning
+\end{itemize} 
+
+\end{enumerate}
+
+Alternative methods:
+\begin{enumerate}
+\item Modeling sequence evolution: the constraint (fitness) of a site should be tied to its importance, defined as the effect on expression if the site is lost. Then one could fit the expression parameters with the sequence evolution. The difficulties include: 
+\begin{itemize}
+\item Parameterization of the fitness function in terms of expression; 
+\item Likilihood computation of sequences is computationally expensive. 
+\end{itemize}
+\item Fitting expression of multiple species: if the expression of each species is also known, then instead of constraining the sequence evolution, one only need to fit the expression of all species, independently for the orthologous CRMs. Suppose $Z$ and $Z'$ be the CRMs of the two species, $\Omega$ and $\Omega'$ be the expression parameters for the two species, we have: 
+\begin{equation}
+P(Z,Z',\Omega,\Omega'|S,E,S',E') \propto P(Z,Z') P(\Omega,\Omega') P(E|S,Z,\Omega) P(E'|S,Z',\Omega')
+\end{equation}
+where the prior distribution $P(Z,Z')$ could be used to encode the tendency that $Z$ and $Z'$ should be aligned. To deal with the case where $E'$ is not known, treat it as missing data, and assume that $Z$ and $W$ are conserved: 
+\begin{equation}
+P(Z,\Omega|S,S',E) = \int{P(E'|E) P(Z,\Omega|S,S',E,E') dE'}
+\end{equation}
+where $P(E'|E)$ can be a Gaussian distribution centered on $E$ to encode the expression conservation. Difficulties: 
+\begin{itemize}
+\item Need to integrate over $E'$ over multiple conditions, computationally expensive. 
+\end{itemize}
+\item Weighting sites in expression model: a conserved site is likely to be functional, thus should make more contribution to the expression. For each site $i$, let $X_i$ be an indicator variable of whether $i$ is functional. A site contributes to expression only when it is functional, thus a contribution of a site in general should be $w_{f_i} [X_i = 1]$. The functional sites evolve more slowly than non-functional sites: either HB model, or lower loss rate. Thus a site in expression is weighted by $P(X_i = 1|S_i)$, where $S_i$ is the orthologous site, and the probability will favor conserved sites. Difficulties: 
+\begin{itemize}
+\item Additional hidden variables for each site: computationally expensive
+\item Still many possible TFs in a region. 
+\end{itemize}
+\item Weigthing TFs in the expression model: similar to the case of sites, weight a TF by its conservation across species. Difficulties: 
+\begin{itemize}
+\item Additional hidden variables for each TF: arbitrary number of TFs possible for a region, computationally expensive
+\item Sequence bias: if a region is very conserved, then many TFs will be conserved, this region will be favored regardless of whether it fits the expression. Thus bias for conserved regions (treating all regions/TFs equally if they pass some threshold may be better). 
+\end{itemize}
+\item Network model: explicitly modeling TF-gene relationship is effectively the same as the above approach. Thus suffer from the same problems. 
+\item Learning regulatory rules using expression model: ideally, the expression model should also capture the TF-TF interactions, thus the importantly interactions will be learned from the expression fitting. Difficulties: 
+\begin{itemize}
+\item Data sparseness/overfitting: for each TF-pair, need at least one parameter. 
+\item Incorporating the TF-TF interactions is difficult without thermodynamic models. 
+\end{itemize}
+\item Learning regulatory rules using sequence conservation: if two TFs, A and B, have interaction, then the composite elements of sites of A and B will be more conserved than individual sites of A and B. Could fit the selection coefficient of A sites that are adjacent to some B site; and the selection coefficient of all A sites. Compare the two. 
+\end{enumerate}
+
+Remark: the baseline approach is clustering genes by expression pattern, and for each cluster, identify enriched (and conserved) motifs. What are the problems of this approach? 
+\begin{itemize}
+\item Low resolution: if the number of experimental conditions is small, it is difficult to distinguish genes with identical regulatory mechanisms. Genes both up-regulated in some conditions may be controlled via different TFs. In the extreme case, suppose there is only one condition, then can only cluster genes by up or down regulation. 
+\item Roles of TFs (as activators and repressors, the strengths) are not clear.
+\item Information is not sufficiently used: (i) expression of trans- factors; (ii) the actual level of expression of genes (up or down) is not used. 
+\item Clustering procedure itself is ambiguous. 
+\end{itemize}
+\end{enumerate}
+\newpage
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Regulatory Evolution}
+\begin{enumerate}
+\item{Regulatory target prediction from multi-species data}
+
+Problem: given a TF with PWM, putative regulatory sequences, expression data across multiple conditions. Both sequence and expression data are available in multiple species. Find the regulatory targets of the TF. 
+
+Intuition: a gene is target if (i) it has a high motif score in its sequence; (ii) its expression pattern is similar to that of another target gene. In the absence of known targets, we can actually use feature (i) to get some targets, and then use feature (ii) to extract more targets, etc. Both features can be enhanced by multiple species conservation. 
+
+Data preprocessing: 
+\begin{itemize}
+\item Sequence extraction: for each gene, use the promoter sequences (e.g. upstream 2K) as the starting sequences (probably need to limit to say, 500bps region with the highest matching to PWM). An alternative solution is for any region, score the sequence against the PWM for each orthologous sequence, then the scores of all orthologous sequences are combined with the phylogenetic average. The sequence region with the highest score will be tested for significance: if not significant, use the promoter of this gene. 
+
+\item Expression data processing: (i) only the genes whose expression has changed significantly will be included in the analysis; (ii) cluster the gene expression pattern and then expression of each gene in each species is represented only by its cluster index. 
+\end{itemize}
+
+Model: 
+\begin{enumerate}
+
+\item{Single species model} 
+
+Suppose there are $N$ genes whose sequences are $S_1, \cdots, S_N$, and expression data $E_1, \cdots, E_N$. For each gene $i$, there is an indicator variable $Z_i$ of whether it is a tareget, $Z_i = 1$ if yes, $Z_i =0$ o/w. Our assumptions are: 
+\begin{itemize}
+\item The sequence $S_i$ of a target is generated from a HMM of motif and background with motif weight $w$. The sequence of a non-target is generated only from background. 
+\item If a gene is target, its expression pattern is likely to take some profiles (that characterize the effect of this TF) rather than other ones. Suppose there are a total of $K$ profiles (clusters), we assume target genes are associated with a multinomial distribution, $p_1, \cdots, p_K$, where $p_k$ is the probability of a target gene being in cluster $k$. The value $p_k$ indicates how strongly a cluster is related to the TF, thus a cluster enriched with targets should have a high $p_k$. Similarly, non-target genes are associated with distribution $q_1, \cdots, q_K$.
+\item The indicator variable $Z_i$ has a prior probablily $\lambda$ to be 1 and $1-\lambda$ to be 0.  
+\end{itemize}
+Assume that the expression data has been transformed to cluster indices, our generative process is: for a gene $i$, first sample $Z_i$, and sample $S_i$ from either HMM or background according to $Z_i$, and then sample $C_i$, the cluster index, from either the distribution $p$ or $q$. The unknown parameters are: $\lambda$, $w$, $p$. We could assume that the background distribution and $q$ known (cluster size distribution since most genes should be non-targets). Let $\theta$ be all parameters, the data likelihood: 
+\begin{equation}
+P(D|\theta) = \prod_{i=1}^{N} \left[ \sum_{Z_i}P(Z_i|\lambda) P(S_i | Z_i, w) P(C_i | Z_i, p,q) \right]
+\end{equation}
+
+\item{Multi-species model}
+
+Suppose there are $M$ species. The sequence, cluster index and indicator variable of the $i$-th gene in the $j$-th species are $S_i^{(j)}$, $C_i^{(j)}$ and $Z_i^{(j)}$ respectively. The variable $Z$ follows a two-state continuous-time Markov chain with rates $\lambda$ (from 0 to 1) and $\mu$ (from 1 to 0) respectively. Once $Z_i$ is given for a gene, the sequence and expression (cluster) are generately independently for each species. So we have: 
+\begin{equation}
+P(D|\theta) = \prod_{i=1}^{N} \left[ \sum_{Z_i}P(Z_i|\lambda, \mu) \prod_{j=1}^M P(S_i^{(j)} | Z_i^{(j)}, w^{(j)}) P(C_i^{(j)} | Z_i^{(j)}, p^{(j)},q^{(j)}) \right]
+\end{equation}
+Note that: for $M$ species, the number of possible $Z_i$ is $2^M$. This is possible only when $M$ is small. Otherwise, could assume that there is at most one gain or loss event per tree. 
+
+\item{TF relevance test}
+
+Problem: the targets learned in this way may not be the true targets - a TF is relevant (to the expression data) only if its targets and non-targets show distinct expression pattern statistically. Thus test the relevance of TF by comparing the cluster distribution of targets and non-targets ($p$ and $q$). Either compare two multinomial distributions or testing the null hypothesis that $q = p$ using perhaps LRT. 
+
+\item{Predicting regulatory modules}
+
+The position of the regulatory sequence is generally unknown for all the genes. Therefore, they should be learned as well. Define $M_i$ as the position of the regulatory module of the $i$-th gene (assume each target gene has one module), then $S_i$ is the sequence starting from $M_i$ with fixed length. To learn $M_i$, do iterative maximization, let $\Theta$ be all parameters: then fix $M$, learn the best $\Theta$; then fix $\Theta$, scan for the sequence of each gene for the best $M_i$. 
+
+\item{Extended sequence model}
+
+Motivation: one motif is often not enough to determine a regulatory target. To expand the method, we consider any given composition motif, defined as the specific combination or arrangement of motifs. For example, two motif occurrances separated by a spacer of certain length. Since what composite motifs may be functional is generally unknown, one has to learn these composite motifs. 
+
+Idea: if a composite motif is functional, then its matches (genes whose sequences contain this feature) and non-matches should tend to have different expression patterns. If there is only a single condition, then the composite motif can be selected by the usual feature selection method (regression of motif matching score with expression value). If there are multiple conditions, could be done in several ways: 
+\begin{itemize}
+\item Multivariate regression: of multiple response variables (expression across many conditions) to a single predictor
+\item Compare two distributions: first choose genes whose matching scores are high and those whose scores are low, then compare the cluster indices of all positive genes (with high matching scores) and of all negative genes. If the composite motif is discriminative, the cluster distribution should be different, e.g. some cluster may be enriched with high-scoring genes. Could be done by a chi-square test. 
+\item Mixture model fitting: use exactly the same model for inference, but test if mixture gives a significantly bettter fit of data than using only a single distribution. 
+\end{itemize}
+
+Model: each sequence contains sites (matches to PWM) as well as composite elements, which are sequence elements consisting of a single motif (of this TF), a spacer (geometric in length) and a site for some cooperative factor. Thus the sequence model is a zero-order HMM with background nucleotides, binding sites of the TF of interest, and composite elements of the cooperative factors. Note that the composite element can have different order, e.g. A-S-B, where A is the TF of interest, S is a spacer, B is the cooperative factor; or B-S-A. 
+
+Post-processing: after learning the targets and regulatory sequences, fit the cooperative model to the target sequences and learn the cooperative factors. 
+
+\end{enumerate}
+
+Analysis: 
+
+\begin{enumerate}
+
+\item Plausibility of the algorithm: without expression data, sequence data provides reasonable evidence for targets and non-targets (motif conservation), thus the task overall should be doable. The expression model further captures the intitution that: two genes with similar expression pattern should be more likely to have the same label. This is because: 
+\begin{itemize}
+\item Mixture model fitting: to fit a mixture of multinomial distribution, it is better to have ``coherent'' clusters - clusters with the same labels. E.g. a two-mixture, the best scenario is: the first cluster has a single label and the second a different label (probability would be equal to 1). Therefore, the model will favor putting all targets into the same cluster and all non-targets into the same cluster. 
+
+\item Special case of Gaussian mixture model: effectively assume that both target expressions and non-target expressions can be represented by $K$ different Gaussian distribution (with different weights in targets and non-targets). The current model has only the multinomial part, but not the Gaussian distributions because we are not interested in doing clustering again and learn the means and variances of each cluster. It is possible to still use the Guassian mixture model for both targets and non-targets, but with fixed cluster membership and fixed cluster parameters. 
+\end{itemize}
+
+\item How does expression data help predicting regulatory targets? Whether a gene is a target depends on the ratio: 
+\begin{equation}
+\frac{P(Z_i = 1)}{P(Z_i = 0)} \cdot \frac{P(S_i | Z_i = 1)}{P(S_i | Z_i = 0)} \cdot \frac{P(C_i | Z_i = 1)}{P(C_i | Z_i = 0)}
+\end{equation}
+Suppose $C_i = k$, if the cluster $k$ already has many targets, then the third term, which is $p_k/q_k$, will be large (because the estimated value of $p_k$ will be large); if cluster $k$ has few targets, the third term will be small. So a target will help genes in the same cluster. This captures our intuition that if the expression of a gene is similar to some target gene, then this gene itself is more likely to be a target. 
+
+\item Why not directly model expression as a two-mixture? The assumption of this approach is: all target genes should have similar expression patterns. This is a very restrictive assmption. Often one TF is involved in multiple expression patterns that may be quite different, see Fig. 5 in [Ramsey \& Shmulevich, PLoS CB, 2008]. It is also known that a TF can be both activator or repressor in different genes. Furthermore, Gaussian mixture model is more difficult to do inference, may be more sensitive to outliers, and may have other technical problems, see [Yu \& Wang, PLoS ONE, 2008]. Finally, the cluster index-based representation of expression data is flexible. Can be used with any clustering program. Because the algorithm deals with the uncertainty of cluster to target relationship (instead of fixing some clusters as associated with a TF), it should be tolerant to the errors of clustering programs. 
+
+\end{enumerate}
+
+Inference: 
+\begin{enumerate}
+
+\item{Single species}
+
+Let $P(S_i | Z_i =0)$ be $b_i$, which is a constant depending on the sequence. Suppose all putative sites of $S_i$ have been extracted, let the product of likelihood ratio of all sites be $u_i$, then $P(S_i|Z_i=1) = b_i u_i w^{n_i^1} (1 -w)^{n_i^0}$ where $n_i^1$ is the number of putative sites and $n_i^0$ is the number of base pairs besides binding sites. The terms involving $w$ come from the fact that each binding site will give a probabiliy $w$ and each background base will give a probability $1-w$. The probability of expression is simple: $P(C_i|Z_i=1) = p_{C_i}$ and  $P(C_i|Z_i=0) = q_{C_i}$. We will use EM algorithm to estimate the parameter values. The log probability of one gene is given by: 
+\begin{equation}
+\log P(S_i, C_i, Z_i = 1|\theta) = \log \lambda + \log(b_i u_i) + n_i^1 \log w + n_i^0 \log(1 - w) + \log p_{C_i}
+\end{equation}
+\begin{equation}
+\log P(S_i, C_i, Z_i = 0|\theta) = \log (1-\lambda) + \log(b_i) + \log q_{C_i}
+\end{equation}
+The expectation of complete data likelihood: 
+\begin{equation}
+Q(\theta|\theta^t) = \sum_{i=1}^n \sum_{Z_i}P(Z_i|S_i,C_i,\theta^t) \log P(S_i, C_i, Z_i|\theta)
+\end{equation}
+Define $r_i = P(Z_i=1|S_i,C_i,\theta^t)$, we have: 
+\begin{equation}
+\begin{array}{ll}
+Q(\theta|\theta^t) = & \sum_{i=1}^n \{ r_i [\log \lambda + \log(b_i u_i) + n_i^1 \log w + n_i^0 \log(1 - w) + \log p_{C_i}] \\
+  & + (1-r_i) [\log (1-\lambda) + \log(b_i) + \log q_{C_i}] \}
+\end{array}
+\end{equation}
+Note that we have the constraint $\sum_k p_k = 1$. Solve the constrained optimization problem by Lagrange multiplier method. Let $t$ be the Lagrange multiplier, and $\hat{Q} = Q(\theta) + t(\sum_k p_k -1)$. 
+\begin{equation}
+\frac{\partial \hat{Q}}{\partial \lambda} = \frac{\partial Q}{\partial \lambda} = \sum_i \left( \frac{r_i}{\lambda }- \frac{1 - r_i}{1 - \lambda} \right) = 0
+\end{equation}
+\begin{equation}
+\frac{\partial \hat{Q}}{\partial w} = \frac{\partial Q}{\partial w} = \sum_i r_i \left( \frac{n_i^1}{w} - \frac{n_i^0}{1-w} \right) = 0
+\end{equation}
+\begin{equation}
+\frac{\partial \hat{Q}}{\partial p_k} = \frac{\partial Q}{\partial p_k} + t = \sum_{i, C_i = k}\frac{r_i}{p_k} + t = 0
+\end{equation}
+\begin{equation}
+\frac{\partial \hat{Q}}{\partial t} = \sum_{k}p_k  - 1 = 0
+\end{equation}
+The value of $r_i$ can be determined by the following equation: 
+\begin{equation}
+r_i = P(Z_i = 1| S_i, C_i, \theta^t) = \frac{\lambda^t u_i (w^t)^{n_i^1} (1-w^t)^{n_i^0} p_{C_i}^t}{\lambda^t u_i (w^t)^{n_i^1} (1-w^t)^{n_i^0} p_{C_i}^t + (1 - \lambda^t) q_{C_i}}
+\end{equation}
+
+\item{Multiple species}
+
+All the parameters can be divided into three groups: evolutionary parameters, $\Theta_E$; sequence parameters, $\Theta_S$ and the expression cluster parameters $\Theta_C$. Cannot have EM for all parameters, but note that, if there is only one type of unknown parameters, it may be easier to learn their values, e.g., if all other parameters are given, $\Theta_C$ can be estimated using EM. Therefore, we use an iterative maximization scheme, once other parameters are fixed: estimate $\Theta_C$ via EM; estimate $\Theta_S$ via HMM (Baum-Welch); and $\Theta_E$ via numerical maximization. 
+
+\end{enumerate}
+
+Alternative methods: 
+
+\begin{enumerate}
+
+\item Machine-learning formulation: want to predict $Z$ from features $X$ and $Y$, where $X$ are sequence features: e.g. the LLR scores taking the average over all species (furthremore, could include cooperative factors, simply another sequence feature) and $Y$ are expression patterns. We can use, e.g. logistic regression. The difficulty with this formulation is to model the evolutionary part, i.e. specify the probability $P(Z|X,Y,Z_a)$ where $Z_a$ is the label of the ancestor. 
+
+\item Instance-based learning: we have the following intuitions: (i) if $X$ is large, $Z$ is likely to be positive; (ii) for the feature $Y$, if two points $Y_1$ and $Y_2$ are similar, then their labels $Z_1$ and $Z_2$ are likely to be similar. Suppose there are $n$ data points without label, let $Z_i$ be the label of point $i$, minimize the following objective function that captures the intutions: 
+\begin{equation}
+\min_{c, \{Z_1, \cdots, Z_n\}} \lambda_1 \sum_i [X_i > c][Z_i = -1] + \lambda_2 \sum_i[X_i < c][Z_i = 1] + \sum_{i,j} \text{Sim}(X_i, X_j) [ Z_i \neq Z_j]
+\end{equation}
+If there are labeled data, it can be added to the above equation (the first two terms). The minimization can be done by, e.g. label propagation. 
+
+\end{enumerate}
+
+
+Issues: 
+\begin{enumerate}
+
+\item Incorporate training data (known targets): the known targets or non-targets can add information, mainly the clusters that are possibly associated with the TF. Inference should be possible with EM. Check the literature on semi-supervised learning of mixture models. 
+
+\item Missing data: could come from several sources: (i) some genes do not have orthologs in all species; (ii) may have more sequence data than expression data (for some species, we have sequences but not expression); (iii) if not all genes are used in training in one species (e.g. only tight clusters), then the training sets of genes may be different in different species. Since expression and sequence data are independent, we have: 
+\begin{equation}
+\int{P(S_i,C_i,Z_i)dC_i} = \int{P(Z_i) P(S_i|Z_i) P(C_i|Z_i) dC_i} = P(Z_i) P(S_i|Z_i)
+\end{equation}
+Therefore, if the expression of a data point is missing, we simply ignore the probability of expression for this data point. 
+
+\item Weighting of evidence: sequence data or expression data are generated independently and have the same weight. Check the literature on Naive Bayes with feature weighting. 
+
+\item Change of motif PWM across species: may need to learn motifs in different species. Intuitively, this is similar to this procedure: use the conservation of target relationship to find orthologous targets, and search for motifs. 
+
+\item Procedure: how to apply the method? Use all genes, or only genes with reliable clusters? If use tight clusters for training, then for prediction of a gene that does not unambiguously belong to some cluster, perhaps need to sum over all possible clusters: 
+\begin{equation}
+P(E_i|Z_i) = \sum_{C_i=1}^K P(E_i|C_i) P(C_i|Z_i)
+\end{equation} 
+where $P(C_i|Z_i)$ is estimated from tight clusters, and $P(E_i|C_i)$ is determined from the mean and variance of the cluster $C_i$. 
+
+\end{enumerate}
+
+\newpage
+
+\item{Dissecting evolutionary constraints of regulatory sequences}
+
+Problem: given a regulatory sequence that is under evolutionary constraint, and a set of TF motifs, what is the contribution of each TF? And is there any remaining constraint that cannot be explained by the given TFs? 
+
+Methods: 
+\begin{enumerate}
+\item Defining constraint [Gaffney \& Majewski, PLoS Genetics, 2008]: consider a given sequence and its alignment with its orthologous sequence. Let $O$ be the number of observed substitutions, and $E$ be the number of expected substitutions (if the sequence is under no constraint), define $D = E - O$, then $D$ is the number of substitutions that are eliminated by natural selection. The constraint of the sequence is defined by: $C = D/E$, the probability that a substitution is removed by natural selection. $E$ can be calculated as $LK$, where $L$ is the length of this sequence, and $K$ is the frequency of neutral substiutions: the number of substitutions in a large set of control sequences dividied by the total sequence length. 
+
+\item Dissecting contraints for multiple TFs: predict binding sites for each TF in the sequence of interest. Need to find $D_i$, the number of substitutions removed by the $i$-th TF. Apply the above analysis only to the binding sites of $i$-th TF: $D_i = E_i - O_i$, where $E_i$ is estimated from the length of all sites of $i$-th TF, and $O_i$ is the observed substitutions in these sites. The constraint due to $i$-th TF is thus: $C_i = D_i/E_i$ and the percent contribution to the total constraint of the sequence is: $\eta_i = D_i / D$.  
+
+\item Binding site overlapping: in a region where binding sites overlap, its contribution to $E$ and $O$ will be evenly split among all TFs in this region. For example, if one site of $A$ and one site of $B$ overlap, then calculate $E$ and $O$ in the overlapped region, and then $E/2$ and $O/2$ will enter the calculation of $A$ and $B$ respectively. 
+
+\item Dealing with indels: the gapped columns in the pairwise alignment will be ignored. Note that the sequence length (needed for computing $E$) will need to be adjusted accordingly. 
+
+\end{enumerate}
+
+Remark: 
+\begin{enumerate}
+\item Control sequences: random noncoding sequences (OK in mammalian), non-first intronic sequences, or synonomyous sites. Ideally, only control sequences in the same region (e.g. 250kb in both sides of the sequence of interest) to deal with mutation rate variation along chromosomes. 
+
+\item Alternative ways of dealing with overlapped binding sites: (i) choose the best match (defined by some PWM match score that is comparable across different TFs); (ii) step-wise search, first compare with all TFs (compute $C_i$ for each TF independently), then choose the TF with the strongest constraint, mask all the sites of this TF; then repeat the process. Stop if $C_i$ is too low, e.g. $< 0.05$. But this method is expensive, need to repeat the procedure many times. 
+
+\end{enumerate}
+
+\newpage
+
+\item{Estimating binding site turnover rate}
+
+Problem: the number of conserved binding sites in two species is a function of the divergence between the two. If the turnover of binding sites follows a molecular clock, the function should be linear, and the slope suggests the rate of turnover. Test this hypothesis and estimate the rate. 
+
+Model: suppose there are $n$ sites in the reference species, and $m_i$ sites are conserved in the orthologous sequence of the $i$-th species. Note that some sites may not be functional, this need to be corrected. Let $f$ be the fraction of non-function sites (FP rate), $r_i$ be the fraction of conserved sites in the control sequences between the reference and the $i$-th species. The fraction of conserved functional sites is approximated by: the number of conserved functional sites $m_i - n f r_i$, divided by the number of functional sites $n (1 - f)$. Let this fraction be a linear function of time: 
+\begin{equation}
+\frac{m_i - n f r_i}{n (1 - f)}	= \beta t_i + \beta_0
+\end{equation}
+where $t_i$ is the divergence of the $i$-th species, $\beta$ and $\beta_0$ are parameters. Let $p_i = m_i/n$, write $p_i$ as a function of $t_i$ and $r_i$: 
+\begin{equation}
+p_i = (1 - f) \beta t_i + f r_i + \beta_0	
+\end{equation}
+Treat the problem as a bivariation linear regression of $p_i$ on the independent variables $t_i$ and $r_i$, and solve the parameters $f$, $\beta$ and $\beta_0$. The coefficient of determination $R^2$ gives an estimate of how well the function fits the data, i.e., how likely the molecular clock hypothesis is valid for binding site turnover. 
+
+Interpretation: the absolute value of $\beta$ indicates the decrease of the fraction of conserved sites in unit time. This is could be due to either the gain of sites in the reference species or the loss of sites in the other species being compared. So $\beta$ is the sum of rates of the two processes. If assume gain and loss rates are equal (the total number of sites is roughly balanced), then $\beta/2$ is an estimate of the rate of binding site loss. 
+
+\newpage
+
+\item{CRM evolution across multiple species}
+
+Model: 
+
+\begin{enumerate}
+
+\item CRM model: a CRM of $K$ motifs with weights $\omega_k, 1 \leq k \leq K$. The gain and loss rates of the $k$-th motif are $\lambda_k$ and $\mu_k$ respectively. The background sequence is subject to substitution process, the model specified by $\Psi_0$, and the motif bases evolve according to the HB model, specified by $\Psi_k$ for the $k$-th motif. 
+
+\item Equilibrium density of motifs: $\omega_k$ can be determined from $\lambda_k$ and $\mu_k$ by the equilibrium assumption: the expected number of TFBS gains and TFBS losses are equal. The results: 
+\begin{equation}
+\omega_k = \frac{\lambda_k}{\mu_k} \cdot \frac{1}{1 + \sum_{k'}\frac{\lambda_{k'}}{\mu_{k'}}} 
+\end{equation}
+And $\omega_0 = 1/(1 + \sum_{k'}\frac{\lambda_{k'}}{\mu_{k'}})$. 
+
+\item Whole sequence model: CRM is embedded in a larger sequence to be searched for. This can be modeled in two ways: 
+\begin{itemize}
+\item Two-state HMM: CRM or NCRM (non-CRM) states, and the two states can move to each other. Model the situation where one sequence can contain 0, 1 or multiple CRMs. 
+\item One-CRM model: each sequence has exactly one CRM. Could be modeled by a three-state HMM: before-CRM, CRM and after-CRM. 
+\end{itemize}
+In both cases, the crucial HMM parameter is CRM length parameter: the probabibility of moving out of CRM (call it $u$). The other parameters, CRM coverage in the first case, and where CRM starts in the second case, are unimportant. Therefore, the effective motif probability $\omega_k$ should be $(1 - u) \omega_k$ and effective background probability within CRM should be $(1 - u) \omega_0$, because one has to stay inside CRM to emit a nt. or a motif. 
+
+\item Indel model: not explicitly model insertion and deletion events, instead, imagine some undetermined number of bases are randomly masked (emulating deletion of sequences); and some columns in the data are invisible at some part of the evolution, but revealed later (emulating insertion of sequences). Also assume that indel history has been annotated as a pre-proprocessing step. 
+
+\end{enumerate}
+
+Inference: 
+
+\begin{enumerate}
+
+\item Decomposition of sequences into blocks: suppose $f(i) = P(S[1..i])$, write $f(i)$ in terms of $f(j)$ where $j < i$. Specifically, the last block in the alignment ended at $i$ can be either a background block (single column, no TFBS) or a motif block (multiple-column, at least one TFBS in one lineage). Let $l_B$ be the length of a block, and $I_B$ be the identify of the block, $I_B = 0$ if a background blcok, or $1 \leq I_B \leq K$ if a motif block. Then we have: 
+\begin{equation}
+f(i) = f(i-1)P(S[i]|I=0) + \sum_{B:I_B>0}f(i-l_B) P(S[i-l_B+1..i]|I_B)
+\end{equation} 
+where $P(S[B]|I_B)$ is the probability of the block $B$, given that $B$ is a block of identify $I_B$. 
+
+\item Block probability computation: since the background block is just a special case of motif blocks, we will only consider the latter. Define state history $\sigma$ as the states of all nodes in the phylogenetic tree. If there are gain or loss events in $\sigma$, then it should also be assoicated with the time of events $t[\sigma]$. The block probability can be written as: 
+\begin{equation}
+P(S) = \sum_{\sigma} \int{P(\sigma,t[\sigma]) P(S|\sigma,t[\sigma]) dt[\sigma]}
+\end{equation}
+
+\item State probability: compute $P(\sigma,t[\sigma])$ of a block for a given $\sigma$ and $t[\sigma]$. First we need to enforce consistency: the actual nucleotide length of any node must be consistent with its state. In other words, this probability is 0 if some node is labeled as $k$, but its nt. length is not $l_k$. Next, we consider the ancestral probability. Let $a$ be the ancestral node, then 
+\begin{equation}
+P(\sigma_a = k) = \omega_k
+\end{equation} 
+\begin{equation}
+P(\sigma_a = 0) = \omega_0^{\hat{l}(a)}
+\end{equation}
+where $\hat{l}(a)$ is the nt. length of the node $a$. Last we consider the branch probability $P(\sigma_a \rightarrow \sigma_b)$ where $a$ to $b$ is a branch. Let $t_{ab}$ be the branch length, $\lambda_0 = \sum_k{\lambda_k}$ be the total gain rate and $\mu_0 = \sum_k{\mu_k}$ be the total loss rate. There are four cases:
+\begin{itemize}
+\item $\sigma_a = k, \sigma_b = k$: no loss event in time $t_{ab}$, thus $P(k \rightarrow k) = 1 - \mu_k t_{ab}$.  
+
+\item $\sigma_a = 0, \sigma_b = 0$: no gain event in time $t_{ab}$, the total survival time of nts is: $[l_{subst}(a,b) + l_{indel}(a,b)/2] t_{ab}$, where $l_{subst}(a,b)$ is the number of substitution columns in this branch and $l_{indel}(a,b)$ is the number of gap columns ('-' aligned with some nt) in this branch  ('-', '-' columns will not contribute to survival time). Thus $P(0 \rightarrow 0) = 1 - \lambda_0 t_{ab}[l_{ subst}(a,b) + l_{indel}(a,b)/2]$. 
+
+\item $\sigma_a = 0, \sigma_b = k$: suppose $t'$ is the time of gain event, $0 \leq t' \leq t_{ab}$, then $P(0 \rightarrow k) = (1 - \lambda_0 t' (l_{ subst}(a,b) + l_{indel}(a,b)/2)) \lambda_k [1 - \mu_k(t_{ab} - t')]$. 
+
+\item $\sigma_a = k, \sigma_b = 0$: similar to above, we have: $P(k \rightarrow 0) = (1 - \mu_k t') \mu_k [1 - \lambda_0(t_{ab} - t') (l_{ subst}(a,b) + l_{indel}(a,b)/2)]$.
+\end{itemize}
+
+\item Sequence probability: compute $P(S|\sigma,t[\sigma])$ for a given block. Once the state history is given, the sequence probabilities are column-independent. First align the block with the motif (a block is chosen only when one site in some lineage is a TFBS, just align the block with this site), then we could classify all columns in the block are either matched or unmatched. For matched columns, apply Felsenstein's algorithm using either $\Psi_0$ or $\Psi_k$ at each branch according to $\sigma$. The gaps in these columns will be treated as missing data. For unmatched columns, they must only come from background model, $\Psi_0$ (because $\Psi_k$ does not allow extra nts outside the motif). So just compute the probability of these columns as usual with Felsenstein's algorithm using only $\Psi_0$. The gaps will be treated as missing data (in fact, the probability of the nts in the part of the tree corresponding to $\Psi_k$ should be 1, because the nts in this part of the tree actually do not exist; but this would only give the same result). 
+
+Example: consider a simple example of a motif block of 3 species, the motif length is 3. The tree of the three species, $A,B,C$ is given by $((A,B),C)$. Use 'b' for a bp and '-' for a gap, and the state $\sigma$ is given in the parenthesis: 
+
+\texttt{A: bbbb (0)}\\
+\texttt{B: b-bb (1)}\\
+\texttt{C: b-bb (1)}\\
+
+Then the columns 1, 3, 4 are matched columns, and column 2 is the unmatched column (insertion of this column in the lineage A). 
+
+\item Computational strategy: to sum over all possible $\sigma$ and integrate over all $t[\sigma]$ is expensive. First we need to restrict $\sigma$'s: 
+\begin{itemize}
+\item At most one event per tree: the number of possible $\sigma$ is linear to the tree size, and $t[\sigma]$ has only one variable, which can be easily integrated. 
+\item Heuristic annotation of trees: use energy threshold to define the states of all leaf nodes, and then reconstruct the tree history by maximum parsimony. In this case, $t[\sigma]$ could have a high dimension, to simplify, assume that the switching events only occur at the nodes (e.g. the beginning node of the branch containing the event). 
+\end{itemize}
+Even if $\sigma$ is given, to integrate over $t[\sigma]$ is difficult if $\sigma$ involves multiple gain or loss events. It is a multivariate integration problem with time complexity exponential to the number of events. Because of dependence among columns (state must change at the same time for all columns), even if $\sigma$ is given, the probability cannot be factorized; if want to apply DP along the tree, must enumerate all possible sites in internal nodes, which is exponential to the length of motif. Two strategies to deal with $t[\sigma]$: 
+\begin{itemize}
+\item If assume $\sigma$ has at most one event, then there is one time variable to integrate, simply do numerical integration. 
+\item If there is no such constraint, can approximate by assuming that each event must occur at a specific point in the branch, e.g. midpoint (probably less biased) or the starting point of the branch (events should occur at the time of speciation). Assuming the time points of events are fixed (mid-branch or beginning), then after computing $P(\sigma, t_{\text{fix}})$ and $P(S|\sigma, t_{\text{fix}})$, where $t_{\text{fix}}$ is the the fixed time point, still need to multiply $t_1$ and $t_2$ to get $P(S, \sigma)$. This is from the integration: 
+\begin{equation}
+\int{P(S|\sigma,t[\sigma])P(\sigma,t[\sigma])dt[\sigma]} \approx P(S|\sigma, t_{\text{fix}}) P(\sigma, t_{\text{fix}}) T
+\end{equation}
+where $T$ is the product of the lengths of all event branches. Check the correctness of algorithm by units: the rate has a unit of $\text{time}^{-1}$, so it must be multiplied with some time varible to get the probability. Alternatively, the above equation can be written as:
+\begin{equation}
+\int{P(S|\sigma,t[\sigma])P(\sigma,t[\sigma])dt[\sigma]} \approx P(S|\sigma, t_{\text{fix}}) P(\sigma) 
+\end{equation} 
+where the last term $P(\sigma)$ has done the integration. 
+\end{itemize}
+
+\end{enumerate}
+
+Model analysis: 
+
+\begin{enumerate}
+
+\item Gain and loss rates: from literature (see notes of EvolModule), the loss rate: 0.2 to 0.5; the gain rate: 0.004 to 0.005. The motif density thus ranges from: 0.008 to 0.025 (approximately gain / loss). Thus choosing loss rate = 0.4 and gain rate = 0.004 (motif density 0.01) seems reasonable. 
+
+\item Scoring conserved sites: the LLR score of a conserved site consists of two parts: the prior probably $P(\sigma)$ and the sequence probability $P(S|\sigma)$ under background model and functional model. Consider for example, a fully site fully conserved in time $t = 3.0$. 
+\begin{itemize}
+\item The penalty from the prior probability will be approximately: $e^{-\mu t} = e^{-1.2} = 0.3$. 
+\item The reward from the sequence conservation: assume JC model for background, assume the consensus nucleotide is about 10 times more frequent than other ones, then under HB model, the rate of substitution is about 1/4 of the background rate. This gives the LLR from sequence: $(0.25 + 0.75 e^{-1}) / (0.25 + 0.75 e^{-4}) \approx 2.0$, where we plug in $4 * 3.0 / 3 = 4$ for background. Suppose there are 4 consensus positions, then LLR from the sequence is about $2^4 = 16$. 
+\end{itemize}
+The total LLR of the site is $16 * 0.3 = 4.8$. There are two additional things that may make the acutal LLR much higher: (i) additional histories with lineage specific change (with large $t$, the prior probability $P(\sigma)$ is quite large); (ii) with multiple species, we have multiple observations, i.e. $t = 3.0$ is split into multiple observations across multiple branches, this will significantly increase LLR. Example: full conservation in 4 lineages with each of size $0.75$ will given LLR $6.8$ for a single nucleotide. 
+
+\item Difficulty of modeling binding site gain: in a motif block containing a gain event, when computing $P(S|\sigma)$, the ancestral sequence of motif subtree is NOT sampled from PWM of the motif. In fact, it is from the posterior distribution of the sequence given the background subtree, thus the ancestral sequence probability would be considerably lower than it would have been if it is from equlibrium distribution. Comparing with the case of full conservation, there are two penalties: gain event from $P(\sigma)$, and the lack of PWM matching in $P(S|\sigma)$. The fundamental difficulty is: when a gain event happens, the motif should be relatively close to a functional site, but this is not reflected in probability computation due to the decoupling of sequence and state evolution. 
+\end{enumerate}
+
+\item{Distribution of number of binding sites and turnover rates}
+
+Equilibrium distribution of binding sites: 
+\begin{itemize}
+\item Background [Sella \& Hirsh, PNAS, 2005]: given a system with $n$ possible states, at equilibrium, the probability of being in the $i$-th state is given by (Equation 9 in the paper): 
+\begin{equation}
+P_i^* \propto f_i^{\nu} = e^{-\nu(-x_i)}	
+\end{equation}
+where $\nu = 2N - 1$, $x_i = \ln f_i$ ($f_i$ is the fitness of state $i$). 
+
+\item Equlibrium distribution: let $P(x)$ be the probability of sequences with $x$ sites, $s(x) = 1 + f(x)$ be the average fitness of the sequences with $x$ sites, $M(x)$ be the possible number of sequences with $x$ sites. Then we have: 
+\begin{equation}
+P(x) \propto M(x) e^{2N \ln s(x)} = M(x) s(x)^{2N} \approx M(x)\left[ 1 + 2N f(x) \right]	
+\end{equation}
+We could approximate $M(k)$ as: there are $L \choose k$ ways of choosing $k$ sites, each site has two orientations, and for each of the rest positions, it can be one of four nucleotides (assume there are $l$ consensus/specific positions of the motif, and a site needs perfect match).
+\begin{equation}
+M(k) \approx {L \choose k} 2^k 4^{L - kl}	 \Rightarrow \frac{M(k)}{M(k-1)} \approx \frac{2L}{k \cdot 4^l}
+\end{equation}
+$M(x)$ thus decays approximately geometrically, favoring smaller values of $x$. Typically, $l = 5 \sim 6$, $L = 500$, $k = 1 - 5$. The equilibrium distribution is thus determined by both $M(x)$ - the entropic term, and $2Nf(x)$ - the selection term. 
+
+\item Strong vs. weak sites: suppose a strong site is equivalent to two weak sites in the fitness, we want to compare the frequencies of the two situations. First, 
+\begin{equation}
+M_s(1) \approx {L \choose 1} 2^1 \cdot 4^{L-l_s} = \frac{2L}{4^{l_s}} 4^L	
+\end{equation}
+where $l_s$ is the length of a strong site (length is defined as the number of specific positions). And similarly, we have: 
+\begin{equation}
+M_w(2) \approx {L \choose 2} 2^2 \cdot 4^{L-2l_w} = \frac{2L^2}{4^{2l_w}} 4^L	
+\end{equation}
+The ratio of the two is: 
+\begin{equation}
+\frac{M_s(1)}{M_w(2)} \approx \frac{4^{2l_w}}{L \cdot 4^{l_s}}	
+\end{equation}
+If we use $l_s = 7$ and $l_w = 5$, we have $M_s(1)/M_w(2) \approx 1/8$, thus the sequences with two weak sites are far more common than a single strong site. 
+\end{itemize}
+
+Turnover rate of binding sites: 
+\begin{itemize}
+\item BS loss rate: consider a sequence with $k$ sites, suppose losing a site will reduce its fitness by $\Delta s$. The rate of mutation that disrupts one site is: $\mu \cdot 3 l$, where $l$ is the number of consensus positions of the motif, and $\mu$ is the mutation rate per nucleotide. The rate of loss per site, $r(k)$, is the product of mutation rate and the fixation probability:  
+\begin{equation}
+r(k) = 3 \mu l \frac{4N\Delta s}{e^{4N\Delta s} - 1}	
+\end{equation}
+With $l = 6$ and $4 N \Delta s = 6$, we have $r(k) \approx 0.27 \mu$, the value that is consistent with empirical observation. 
+
+\end{itemize}
+
+\end{enumerate}
+
+\end{document}
