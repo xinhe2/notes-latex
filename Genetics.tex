@@ -6745,6 +6745,13 @@ Disentangling the Effects of Colocalizing Genomic Annotations to Functionally Pr
 	\item Remark: the method does not account for LD uncertainty, and it only uses genome-wide significant SNPs.
 \end{itemize}
 
+GREGOR: evaluating global enrichment of trait-associated variants in epigenomic features using a systematic, data-driven approach [Schmidt and Willer, Bioinfo, 2015]
+\begin{itemize}
+	\item Overview: LD pruning to obtain a set of independent GWAS index SNPs. Next we evaluate the overlap of these SNPs with a feature and compare that with a set of matched SNPs. To account for LD: expand to LD proxies ($r^2 $>$ 0.7$), only for testing if a SNP overlap with a feature.
+	
+	\item Method (Table 1): let $s$ be the number of index SNPs overlapping a feature (where overlapping allows LD proxy). The problem is to obtain the significance of $s$. For each index SNP, we obtain a set of $m$ matched SNPs with the same LD, MAF and gene distance. Then for SNP set $i$, by chance index SNP $i$ will overlap the feature with probability $p_i$, which is the proportion of feature overlap among (m+1) SNPs in SNP set $i$. Then the null distribution of $s$ is the sum of Bernoulli RVs $\sum S_i$, where $S_i \sim \text{Bern}(p_i)$. Show that significance from permutation results are similar to analytic results.
+\end{itemize}
+
 GWAS Analysis of Regulatory or Functional Information Enrichment with LD correction (GARFIELD) [review for NG, 2016]
 \begin{itemize}
 	\item Goal: testing enriched features/annotations among GWAS loci. 
